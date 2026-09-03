@@ -1,0 +1,21 @@
+{
+  "name": "vera",
+  "version": "1.0.0",
+  "description": "VERA — Voice Emergency Response Assistant & Smart Complaint Management System",
+  "private": true,
+  "scripts": {
+    "dev:backend": "npm --prefix backend run dev",
+    "dev:frontend": "npm --prefix frontend run dev",
+    "build:backend": "npm --prefix backend run build",
+    "build:frontend": "npm --prefix backend run build"
+  },
+  "keywords": [
+    "emergency-response",
+    "complaint-management",
+    "omniroute",
+    "supabase",
+    "realtime"
+  ],
+  "author": "VERA Team",
+  "license": "MIT"
+}

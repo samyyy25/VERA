@@ -1,0 +1,390 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-[#080d1a] text-slate-100 font-sans;
+  }
+}
+
+/* ──────────────────────────────────────────────────────────
+   Custom Scrollbar
+────────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: #0b132b; }
+::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #0d9488; }
+
+/* ──────────────────────────────────────────────────────────
+   Glassmorphic Panels
+────────────────────────────────────────────────────────── */
+.glass-panel {
+  background: rgba(15, 23, 42, 0.75);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.glass-panel-glow {
+  background: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(13, 148, 136, 0.3);
+  box-shadow: 0 0 25px -5px rgba(13, 148, 136, 0.15);
+}
+.glass-emergency {
+  background: rgba(30, 10, 15, 0.85);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  box-shadow: 0 0 35px -5px rgba(239, 68, 68, 0.25);
+}
+
+/* ──────────────────────────────────────────────────────────
+   Emergency Response Overlay
+────────────────────────────────────────────────────────── */
+.vera-emergency-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
+  background: rgba(4, 6, 18, 0.97);
+  backdrop-filter: blur(8px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.vera-emg-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px;
+  background: linear-gradient(90deg, rgba(239,68,68,0.2) 0%, rgba(8,13,26,0.95) 100%);
+  border-bottom: 1px solid rgba(239,68,68,0.4);
+  box-shadow: 0 0 30px -5px rgba(239,68,68,0.3);
+  flex-shrink: 0;
+}
+.vera-emg-header-left { display: flex; align-items: center; gap: 12px; }
+.vera-pulse-dot {
+  width: 10px; height: 10px; border-radius: 50%;
+  background: #ef4444;
+  animation: pulseRed 1.2s infinite;
+}
+@keyframes pulseRed {
+  0%,100% { box-shadow: 0 0 0 0 rgba(239,68,68,0.7); }
+  50% { box-shadow: 0 0 0 8px rgba(239,68,68,0); }
+}
+.vera-emg-badge {
+  font-size: 13px; font-weight: 700; color: #fca5a5;
+  letter-spacing: 0.05em;
+}
+.vera-emg-risk {
+  font-size: 11px; color: #94a3b8;
+  background: rgba(239,68,68,0.1);
+  padding: 2px 8px; border-radius: 20px;
+  border: 1px solid rgba(239,68,68,0.25);
+}
+.vera-emg-close {
+  background: rgba(239,68,68,0.15);
+  border: 1px solid rgba(239,68,68,0.3);
+  color: #fca5a5;
+  padding: 6px 16px; border-radius: 6px;
+  cursor: pointer; font-size: 13px;
+  transition: all 0.2s;
+}
+.vera-emg-close:hover { background: rgba(239,68,68,0.3); }
+
+/* ──────────────────────────────────────────────────────────
+   Main Grid
+────────────────────────────────────────────────────────── */
+.vera-emg-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  padding: 12px 16px;
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+@media (max-width: 900px) {
+  .vera-emg-grid { grid-template-columns: 1fr; }
+}
+.vera-emg-col-left, .vera-emg-col-right {
+  display: flex; flex-direction: column; gap: 10px;
+}
+
+/* ──────────────────────────────────────────────────────────
+   Cards
+────────────────────────────────────────────────────────── */
+.vera-emg-card {
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 10px;
+  padding: 14px;
+  backdrop-filter: blur(8px);
+}
+.vera-emg-card-title {
+  display: flex; align-items: center; gap: 7px;
+  font-size: 12px; font-weight: 600;
+  color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em;
+  margin-bottom: 10px;
+}
+.vera-poi-badge {
+  margin-left: auto; font-size: 10px;
+  background: rgba(255,255,255,0.05);
+  padding: 2px 7px; border-radius: 10px;
+  text-transform: none; letter-spacing: 0;
+}
+
+/* ──────────────────────────────────────────────────────────
+   Leaflet Map
+────────────────────────────────────────────────────────── */
+.vera-map-container {
+  height: 300px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,0.08);
+}
+.vera-map-container .leaflet-container {
+  background: #0b132b;
+}
+
+/* ──────────────────────────────────────────────────────────
+   POI Cards
+────────────────────────────────────────────────────────── */
+.vera-poi-loading { display:flex; align-items:center; gap:8px; color:#64748b; font-size:13px; }
+.vera-poi-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.vera-poi-card {
+  padding: 10px 12px; border-radius: 8px;
+  display: flex; gap: 10px; align-items: flex-start;
+}
+.vera-poi-found {
+  background: rgba(16,185,129,0.07);
+  border: 1px solid rgba(16,185,129,0.25);
+}
+.vera-poi-missing {
+  background: rgba(100,116,139,0.07);
+  border: 1px solid rgba(100,116,139,0.2);
+}
+.vera-poi-icon { color: #64748b; margin-top: 2px; flex-shrink:0; }
+.vera-poi-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; }
+.vera-poi-name { font-size: 13px; font-weight: 600; color: #e2e8f0; margin-top: 2px; }
+.vera-poi-dist { font-size: 12px; color: #10b981; }
+.vera-poi-phone { font-size: 11px; color: #94a3b8; }
+.vera-poi-dir {
+  display: inline-flex; align-items:center; gap:4px;
+  font-size: 11px; color: #38bdf8; text-decoration: none; margin-top: 4px;
+}
+.vera-poi-dir:hover { text-decoration: underline; }
+.vera-poi-none { font-size: 12px; color: #475569; margin-top: 2px; }
+
+/* ──────────────────────────────────────────────────────────
+   SMS Card
+────────────────────────────────────────────────────────── */
+.vera-sms-card { border-color: rgba(234,179,8,0.2); background: rgba(20,16,4,0.8); }
+.vera-sms-payload {
+  font-family: monospace; font-size: 13px;
+  background: rgba(0,0,0,0.4); padding: 8px 12px;
+  border-radius: 6px; color: #fbbf24;
+  letter-spacing: 0.02em; margin-bottom: 6px;
+  word-break: break-all;
+}
+.vera-sms-meta { font-size: 10px; color: #78716c; margin-bottom: 8px; }
+.vera-sms-copy {
+  display: inline-flex; align-items: center; gap: 5px;
+  background: rgba(234,179,8,0.1);
+  border: 1px solid rgba(234,179,8,0.3);
+  color: #fbbf24; padding: 5px 12px;
+  border-radius: 6px; cursor: pointer;
+  font-size: 12px; transition: all 0.2s;
+}
+.vera-sms-copy:hover { background: rgba(234,179,8,0.2); }
+
+/* ──────────────────────────────────────────────────────────
+   Triage Chat
+────────────────────────────────────────────────────────── */
+.vera-triage-card { border-color: rgba(239,68,68,0.2); }
+.vera-ai-badge {
+  margin-left: auto; font-size: 10px;
+  display: inline-flex; align-items:center; gap:4px;
+  padding: 2px 8px; border-radius: 10px;
+  text-transform: none; letter-spacing: 0;
+}
+.vera-ai-live { background: rgba(16,185,129,0.1); border:1px solid rgba(16,185,129,0.3); color: #10b981; }
+.vera-ai-fallback { background: rgba(100,116,139,0.1); border:1px solid rgba(100,116,139,0.3); color: #94a3b8; }
+
+.vera-chat-log {
+  display: flex; flex-direction: column; gap: 8px;
+  max-height: 280px; overflow-y: auto; padding-right: 4px;
+  margin-bottom: 10px;
+}
+.vera-chat-bubble {
+  padding: 10px 12px; border-radius: 8px;
+}
+.vera-chat-system { background: rgba(30,41,59,0.6); border: 1px solid rgba(255,255,255,0.06); }
+.vera-chat-vera { background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.2); }
+.vera-chat-user { background: rgba(56,189,248,0.08); border: 1px solid rgba(56,189,248,0.2); }
+.vera-chat-current { animation: fadeInUp 0.3s ease; }
+.vera-chat-loading { display:flex; align-items:center; gap:8px; color:#64748b; font-size:13px; }
+.vera-chat-label { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:#64748b; display:block; margin-bottom:4px; }
+.vera-chat-bubble p { margin:0; font-size:13px; line-height:1.5; color:#e2e8f0; }
+.vera-chat-arrow { color: #ef4444; float: right; margin-top: -14px; }
+@keyframes fadeInUp {
+  from { opacity:0; transform: translateY(6px); }
+  to { opacity:1; transform: translateY(0); }
+}
+
+.vera-voice-area { display:flex; flex-direction:column; gap:8px; }
+.vera-voice-input {
+  width:100%; background:rgba(15,23,42,0.9);
+  border:1px solid rgba(255,255,255,0.1); border-radius:8px;
+  padding: 10px 12px; color: #e2e8f0; font-size: 13px;
+  resize: none; outline: none; font-family: inherit;
+  transition: border-color 0.2s;
+  box-sizing: border-box;
+}
+.vera-voice-input:focus { border-color: rgba(239,68,68,0.5); }
+.vera-voice-controls { display:flex; gap:8px; align-items:center; }
+.vera-mic-btn {
+  width:40px; height:40px; border-radius:50%;
+  background: rgba(15,23,42,0.9);
+  border: 1px solid rgba(255,255,255,0.1);
+  color: #94a3b8; cursor:pointer;
+  display:flex; align-items:center; justify-content:center;
+  flex-shrink:0; transition: all 0.2s;
+}
+.vera-mic-btn:hover { border-color: rgba(239,68,68,0.4); color:#ef4444; }
+.vera-mic-active {
+  background: rgba(239,68,68,0.2) !important;
+  border-color: #ef4444 !important; color: #ef4444 !important;
+  animation: pulseRed 1.2s infinite;
+}
+.vera-submit-btn {
+  flex:1; display:flex; align-items:center; justify-content:center; gap:6px;
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  color: white; border: none; border-radius: 8px;
+  padding: 10px 16px; font-size: 13px; font-weight: 600;
+  cursor: pointer; transition: all 0.2s;
+}
+.vera-submit-btn:disabled { opacity:0.4; cursor:not-allowed; }
+.vera-submit-btn:not(:disabled):hover { transform:scale(1.02); box-shadow:0 4px 15px -3px rgba(239,68,68,0.4); }
+
+.vera-triage-complete {
+  display:flex; align-items:center; gap:8px;
+  color: #94a3b8; font-size:13px; padding:10px;
+}
+.vera-triage-done {
+  display:flex; align-items:center; gap:8px;
+  color: #10b981; font-size:13px; padding:10px;
+}
+
+/* ──────────────────────────────────────────────────────────
+   Translation
+────────────────────────────────────────────────────────── */
+.vera-translate-controls { display:flex; gap:8px; margin-bottom:10px; }
+.vera-lang-select {
+  flex:1; background:rgba(15,23,42,0.9);
+  border:1px solid rgba(255,255,255,0.1); border-radius:6px;
+  color:#e2e8f0; padding:6px 10px; font-size:12px; outline:none;
+}
+.vera-translate-btn {
+  display:flex; align-items:center; gap:5px;
+  background:rgba(56,189,248,0.1);
+  border:1px solid rgba(56,189,248,0.25);
+  color:#38bdf8; padding:6px 14px;
+  border-radius:6px; cursor:pointer; font-size:12px;
+  transition:all 0.2s;
+}
+.vera-translate-btn:hover { background:rgba(56,189,248,0.2); }
+.vera-translate-panels { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.vera-translate-box { display:flex; flex-direction:column; gap:4px; }
+.vera-translate-box-label { font-size:10px; text-transform:uppercase; letter-spacing:0.05em; color:#64748b; }
+.vera-translate-text {
+  background:rgba(0,0,0,0.3); padding:8px 10px;
+  border-radius:6px; font-size:12px; line-height:1.5;
+  min-height:50px; color:#e2e8f0;
+}
+.vera-translate-original { border:1px solid rgba(255,255,255,0.06); }
+.vera-translate-result { border:1px solid rgba(56,189,248,0.2); color:#7dd3fc; }
+.vera-translate-placeholder { color:#475569; font-style:italic; }
+
+/* ──────────────────────────────────────────────────────────
+   Responder Summary
+────────────────────────────────────────────────────────── */
+.vera-summary-card { border-color: rgba(16,185,129,0.25); }
+.vera-summary-badge {
+  margin-left:auto; font-size:10px;
+  background:rgba(16,185,129,0.15); color:#10b981;
+  border:1px solid rgba(16,185,129,0.3); padding:2px 8px; border-radius:10px;
+}
+.vera-summary-text {
+  font-size:12px; line-height:1.7; color:#d1fae5;
+  background:rgba(0,0,0,0.3); padding:10px 12px;
+  border-radius:6px; border:1px solid rgba(16,185,129,0.15);
+  white-space:pre-wrap; font-family:inherit; margin-bottom:8px;
+}
+
+/* ──────────────────────────────────────────────────────────
+   Timeline
+────────────────────────────────────────────────────────── */
+.vera-timeline { display:flex; flex-direction:column; gap:6px; max-height:220px; overflow-y:auto; }
+.vera-timeline-entry {
+  display:flex; gap:10px; align-items:flex-start;
+  padding:6px 8px; border-radius:6px;
+  background:rgba(15,23,42,0.5);
+  animation: fadeInUp 0.3s ease;
+}
+.vera-timeline-icon { font-size:14px; flex-shrink:0; margin-top:1px; }
+.vera-timeline-event { font-size:12px; color:#e2e8f0; line-height:1.4; }
+.vera-timeline-time { font-size:10px; color:#475569; margin-top:2px; }
+
+/* ──────────────────────────────────────────────────────────
+   Spin animation
+────────────────────────────────────────────────────────── */
+.vera-spin { animation: spin 1s linear infinite; }
+@keyframes spin { to { transform:rotate(360deg); } }
+
+/* ──────────────────────────────────────────────────────────
+   Command Center Incident Map Pulse & Markers (Section 48/49)
+────────────────────────────────────────────────────────── */
+@keyframes radarPing {
+  0% {
+    transform: scale(0.6);
+    opacity: 0.9;
+  }
+  70% {
+    transform: scale(2.2);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(2.4);
+    opacity: 0;
+  }
+}
+
+.marker-radar-ring {
+  position: absolute;
+  inset: -12px;
+  border-radius: 9999px;
+  border: 2px solid rgba(239, 68, 68, 0.75);
+  animation: radarPing 2s cubic-bezier(0, 0.2, 0.8, 1) infinite;
+  pointer-events: none;
+}
+
+.marker-radar-ring-2 {
+  position: absolute;
+  inset: -20px;
+  border-radius: 9999px;
+  border: 1.5px solid rgba(239, 68, 68, 0.4);
+  animation: radarPing 2s cubic-bezier(0, 0.2, 0.8, 1) infinite;
+  animation-delay: 0.7s;
+  pointer-events: none;
+}
+
+/* Custom leaflet map dark tile filter */
+.leaflet-container {
+  background: #080d1a !important;
+  font-family: inherit;
+}
+.dark-map-tiles {
+  filter: brightness(0.85) contrast(1.15) saturate(1.1);
+}
+
