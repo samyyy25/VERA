@@ -11,6 +11,85 @@ class LocalComplaintStore {
   private events: Map<string, IncidentEvent[]> = new Map();
   private incidents: Map<string, Incident> = new Map();
 
+  private toDbPayload(comp: Complaint) {
+    let dbPhotoUrl = comp.photo_url || null;
+    if (comp.video_url) {
+      if (comp.photo_url) {
+        dbPhotoUrl = JSON.stringify({ photo: comp.photo_url, video: comp.video_url });
+      } else {
+        dbPhotoUrl = comp.video_url;
+      }
+    }
+
+    return {
+      id: comp.id,
+      reporter_id: comp.reporter_id || null,
+      device_session_id: comp.device_session_id,
+      category: comp.category,
+      description: comp.description,
+      photo_url: dbPhotoUrl,
+      voice_transcript: comp.voice_transcript || null,
+      latitude: comp.latitude,
+      longitude: comp.longitude,
+      gps_accuracy: comp.gps_accuracy || null,
+      address: comp.address || null,
+      risk_score: comp.risk_score,
+      risk_level: comp.risk_level,
+      status: comp.status,
+      created_at: comp.created_at,
+      updated_at: comp.updated_at,
+    };
+  }
+
+  private mapDbRowToComplaint(row: any): Complaint {
+    let photo_url = row.photo_url || null;
+    let video_url: string | null = null;
+
+    if (photo_url) {
+      if (typeof photo_url === 'string' && photo_url.startsWith('{"') && photo_url.endsWith('}')) {
+        try {
+          const parsed = JSON.parse(photo_url);
+          photo_url = parsed.photo || null;
+          video_url = parsed.video || null;
+        } catch {
+          // keep photo_url as is
+        }
+      } else if (
+        typeof photo_url === 'string' &&
+        (photo_url.startsWith('data:video/') ||
+          photo_url.endsWith('.mp4') ||
+          photo_url.endsWith('.webm') ||
+          photo_url.endsWith('.mov'))
+      ) {
+        video_url = photo_url;
+        photo_url = null;
+      }
+    }
+
+    const deptInfo = getDepartmentForCategory(row.category);
+
+    return {
+      id: row.id,
+      reporter_id: row.reporter_id || null,
+      device_session_id: row.device_session_id || 'anonymous_device',
+      category: row.category,
+      description: row.description,
+      photo_url,
+      video_url,
+      voice_transcript: row.voice_transcript || null,
+      latitude: Number(row.latitude),
+      longitude: Number(row.longitude),
+      gps_accuracy: row.gps_accuracy != null ? Number(row.gps_accuracy) : null,
+      address: row.address || null,
+      risk_score: Number(row.risk_score || 0),
+      risk_level: row.risk_level || 'LOW',
+      status: row.status || 'Reported',
+      routed_department: row.routed_department || deptInfo.department,
+      created_at: row.created_at,
+      updated_at: row.updated_at || row.created_at,
+    };
+  }
+
   async createComplaint(data: CreateComplaintDTO): Promise<{ complaint: Complaint; riskEvaluation: RiskEvaluationResult; incident?: Incident }> {
     const supabase = getSupabase();
     const id = uuidv4();
@@ -57,23 +136,30 @@ class LocalComplaintStore {
     // 2. Persist to Supabase if configured
     if (supabase) {
       try {
+        const payload = this.toDbPayload(newComplaint);
         const { data: inserted, error } = await supabase
           .from('complaints')
-          .insert(newComplaint)
+          .insert(payload)
           .select()
           .single();
 
-        if (!error && inserted) {
-          this.complaints.set(inserted.id, inserted);
-          await this.addEvent(inserted.id, null, 'Reported', `Complaint submitted via citizen portal. Routed to: ${deptInfo.department}`, 'CITIZEN');
+        if (error) {
+          console.error('Supabase complaint insert error:', error);
+        } else if (inserted) {
+          const mapped = this.mapDbRowToComplaint(inserted);
+          if (!mapped.video_url && newComplaint.video_url) mapped.video_url = newComplaint.video_url;
+          mapped.routed_department = newComplaint.routed_department;
+
+          this.complaints.set(mapped.id, mapped);
+          await this.addEvent(mapped.id, null, 'Reported', `Complaint submitted via citizen portal. Routed to: ${deptInfo.department}`, 'CITIZEN');
 
           // Send real email notification asynchronously & log result
-          this.dispatchNotification(inserted, deptInfo);
+          this.dispatchNotification(mapped, deptInfo);
 
           if (isCritical) {
-            createdIncident = await this.createIncidentRecord(inserted.id, inserted, riskEvaluation.score);
+            createdIncident = await this.createIncidentRecord(mapped.id, mapped, riskEvaluation.score);
           }
-          return { complaint: inserted, riskEvaluation, incident: createdIncident };
+          return { complaint: mapped, riskEvaluation, incident: createdIncident };
         }
       } catch (err) {
         console.warn('Supabase insert failed, falling back to local memory store:', err);
@@ -194,8 +280,38 @@ class LocalComplaintStore {
         }
         const { data, error } = await query;
         if (!error && data) {
-          data.forEach(c => this.complaints.set(c.id, c));
-          return data;
+          const allMap = new Map<string, Complaint>();
+          // 1. Overlay any local memory items (in case of offline/fallback)
+          this.complaints.forEach((c, k) => allMap.set(k, c));
+          // 2. Map Supabase rows and overlay them
+          data.forEach(row => {
+            const mapped = this.mapDbRowToComplaint(row);
+            allMap.set(mapped.id, mapped);
+            this.complaints.set(mapped.id, mapped);
+          });
+          let results = Array.from(allMap.values()).sort(
+            (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+          );
+
+          if (filter?.category && filter.category !== 'ALL') {
+            results = results.filter(c => c.category.toLowerCase() === filter.category!.toLowerCase());
+          }
+          if (filter?.status && filter.status !== 'ALL') {
+            results = results.filter(c => c.status === filter.status);
+          }
+          if (filter?.risk_level && filter.risk_level !== 'ALL') {
+            results = results.filter(c => c.risk_level === filter.risk_level);
+          }
+          if (filter?.search) {
+            const q = filter.search.toLowerCase();
+            results = results.filter(c => 
+              c.description.toLowerCase().includes(q) || 
+              (c.address && c.address.toLowerCase().includes(q)) ||
+              c.category.toLowerCase().includes(q) ||
+              c.id.toLowerCase().includes(q)
+            );
+          }
+          return results;
         }
       } catch (err) {
         console.warn('Supabase select failed, reading local store:', err);
@@ -237,7 +353,7 @@ class LocalComplaintStore {
     if (supabase) {
       try {
         const { data: comp } = await supabase.from('complaints').select('*').eq('id', id).single();
-        if (comp) complaint = comp;
+        if (comp) complaint = this.mapDbRowToComplaint(comp);
         const { data: evts } = await supabase.from('incident_events').select('*').eq('complaint_id', id).order('created_at', { ascending: true });
         if (evts) events = evts;
         const { data: inc } = await supabase.from('incidents').select('*').eq('complaint_id', id).single();

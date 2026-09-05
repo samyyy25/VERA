@@ -238,7 +238,10 @@ export default function App() {
           {activeTab === 'citizen' && (
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
               <div className="lg:col-span-8">
-                <ComplaintForm onSuccess={() => {}} />
+                <ComplaintForm
+                  onSuccess={() => {}}
+                  onNavigateToDashboard={() => setActiveTab('admin')}
+                />
               </div>
               <div className="lg:col-span-4 space-y-4">
                 <div className="glass-panel rounded-2xl p-5 border border-slate-800">

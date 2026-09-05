@@ -31,6 +31,7 @@ import { shareIncident } from '../../utils/shareCardGenerator';
 
 interface ComplaintFormProps {
   onSuccess?: (complaint: Complaint) => void;
+  onNavigateToDashboard?: () => void;
 }
 
 const CATEGORIES = [
@@ -47,7 +48,7 @@ const CATEGORIES = [
   { id: 'Other civic issues', label: 'Other Issue', dept: 'General Municipal Helpdesk', icon: Radio, emergency: false },
 ];
 
-export const ComplaintForm: React.FC<ComplaintFormProps> = ({ onSuccess }) => {
+export const ComplaintForm: React.FC<ComplaintFormProps> = ({ onSuccess, onNavigateToDashboard }) => {
   const [category, setCategory] = useState<string>('Road damage');
   const [description, setDescription] = useState<string>('');
   
@@ -356,12 +357,23 @@ export const ComplaintForm: React.FC<ComplaintFormProps> = ({ onSuccess }) => {
           )}
         </div>
 
-        <button
-          onClick={handleResetForm}
-          className="px-6 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-slate-950 font-semibold text-sm transition shadow-lg shadow-teal-500/20"
-        >
-          Submit Another Report
-        </button>
+        <div className="flex flex-col sm:flex-row items-center gap-3">
+          {onNavigateToDashboard && (
+            <button
+              type="button"
+              onClick={onNavigateToDashboard}
+              className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold text-sm transition shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2"
+            >
+              <span>View in Command Center</span>
+            </button>
+          )}
+          <button
+            onClick={handleResetForm}
+            className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-slate-950 font-semibold text-sm transition shadow-lg shadow-teal-500/20"
+          >
+            Submit Another Report
+          </button>
+        </div>
       </div>
     );
   }

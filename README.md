@@ -151,3 +151,4 @@ Or check visually via the in-app **Telemetry** page.
 ## 📌 Note
 
 VERA is a hackathon prototype. Department notification, dispatch routing, and video-room role identity are simulated/simplified for demonstration and are clearly labeled as such throughout the application. Production deployment would require integration with real municipal, police, and hospital systems, which is outside this prototype's scope.
+
