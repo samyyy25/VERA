@@ -8,14 +8,7 @@
 
 ## 📖 Project Overview
 
-VERA is a real-time **Smart Complaint & Public Issue Management System** with **automatic emergency escalation**. It's built on a simple insight: not all public complaints carry the same urgency, yet most civic reporting systems treat a broken streetlight and a life-threatening emergency identically — as a ticket in the same slow queue.
-
-VERA fixes this by operating on two levels within a single, unified platform:
-
-- **Level 1 — Public Complaint Management:** citizens report routine civic issues (road damage, garbage, streetlights, water leakage, noise, and more), which are tracked through a transparent, timestamped resolution workflow.
-- **Level 2 — Emergency Response:** a deterministic backend risk engine continuously analyzes every report, and automatically escalates anything indicating real danger into a live emergency workflow — activating voice interaction, real-time translation, GPS-based responder location, and instant department notification.
-
-A complaint doesn't need to be filed as an emergency to become one. VERA watches its own queue so nothing dangerous slips through simply because it wasn't labeled correctly.
+VERA is a real-time **Smart Complaint & Public Issue Management System** with **automatic emergency escalation**. Most civic reporting platforms treat every complaint identically — a broken streetlight and a life-threatening accident sit in the same slow queue. VERA fixes this by scoring every report's real urgency the moment it's submitted, and automatically activating an emergency response workflow the instant something dangerous is detected — no one has to manually flag it as urgent.
 
 ---
 
@@ -24,53 +17,53 @@ A complaint doesn't need to be filed as an emergency to become one. VERA watches
 **Problem Statement 3 — Smart Complaint & Public Issue Management System**
 *Design a centralized platform for reporting, tracking, prioritizing, and resolving public or organizational complaints efficiently.*
 
-Most solutions to this problem are digital suggestion boxes: a citizen submits a complaint, it sits in a queue, and someone reviews it days later. This works acceptably for a pothole. It fails dangerously for anything urgent — an accident, an injury, a threat, or a hazard where minutes matter. Compounding this, language barriers and panic make it genuinely difficult for people in distress to communicate clearly with responders, and multiple people reporting the same incident often creates duplicate, uncoordinated tickets instead of one clear picture.
+Standard complaint systems are digital suggestion boxes: submit, wait, hope someone reads it. That's tolerable for a pothole and dangerous for an emergency. VERA reframes complaints as existing on a severity spectrum rather than a flat queue, and builds the infrastructure to detect and act on that spectrum automatically.
 
 ---
 
 ## 💡 Proposed Solution
 
-VERA reframes "complaint management" around a severity spectrum instead of a flat queue:
+1. A citizen reports an issue — category, description, optional photo/video, voice input — with automatic GPS capture and reverse-geocoded location.
+2. A **deterministic backend risk engine** scores the report 0–100 using weighted danger keywords, reporter frequency, and location clustering — never an LLM, never random.
+3. The report is **automatically routed to the correct responsible authority** (Municipal Roads, Sanitation, Electrical, Water, Police, Fire, Medical) based on category, with a target SLA and a real notification sent to that department.
+4. If the risk score crosses the threshold (≥60), the report **automatically escalates to Critical Incident status**, instantly provisioning a live video coordination room and activating the full emergency workflow.
+5. Every action — status change, routing decision, notification, live session — is logged in a transparent, timestamped audit trail, visible in real time on the Command Center.
 
-1. A citizen submits a report — text, photo, video, or voice — with automatic GPS capture and reverse-geocoded location.
-2. A **deterministic backend risk engine** (not an LLM — see Technology Stack) scores the report from 0–100 using weighted danger keywords, reporter frequency, and location clustering.
-3. Reports scoring below the threshold flow through a standard **Reported → Verified → In Progress → Resolved** workflow, routed automatically to the correct civic department.
-4. Reports crossing the risk threshold are **automatically escalated to Critical Incident status**, instantly activating:
-   - A live voice interface with real-time speech-to-text and multilingual translation
-   - GPS-based nearest hospital and police station detection
-   - An auto-generated, responder-ready incident summary
-   - An optional live video room where the citizen and responding departments (Police, Municipal, Hospital) can join and coordinate in real time
-5. Every status change and system action is logged in a transparent incident timeline — nothing happens silently.
-
-VERA does not claim to physically repair a road or dispatch a real ambulance — no software can. Its value is faster, smarter triage and communication: getting the right information, to the right people, in seconds instead of days.
+VERA does not claim to physically repair anything or dispatch real emergency units — it claims to detect, route, and coordinate faster than a manual process could, and to never fabricate a status or a statistic along the way.
 
 ---
 
 ## ✨ Features
 
-### Level 1 — Public Complaint Management
-- Citizen reporting portal: category selection, description, optional photo/video, voice input
-- Automatic GPS capture with accuracy display and reverse-geocoded address
-- Real-time admin Command Center with live incident feed (no manual refresh)
-- Full status workflow with a permanent, timestamped incident audit timeline
-- Category-to-department authority routing with real email notifications
-- Composite share cards (photo + incident context combined into one shareable image via the Web Share API)
+### Command Center (Dashboard)
+Real-time overview: total incidents, active issues, critical escalations, and resolved counts, each with a live sparkline. A live incidents table and an interactive incident map are shown side by side, with click-to-expand incident detail popovers.
 
-### Level 2 — Emergency Response
-- **Deterministic Risk Engine:** weighted keyword matching, reporter-frequency detection, and location clustering — server-side, non-bypassable, and never randomly generated
-- **Automatic Escalation:** any report crossing the risk threshold instantly becomes a Critical Incident, no manual flagging required
-- **AI Voice Interpreter:** real-time speech-to-text via the Web Speech API, with context-aware follow-up questions routed through OmniRoute
-- **Multilingual Translation:** live translation between reporter and responder via LibreTranslate (MyMemory fallback)
-- **Nearest Hospital & Police Finder:** live queries against OpenStreetMap's Overpass API, with distance and directions
-- **Auto-Generated Responder Summary:** a clean, structured incident brief built from real data — never placeholder text
-- **Multi-Department Live Video Room:** Jitsi Meet-powered live coordination room per incident, with role-tagged participants (Citizen, Police, Municipal, Hospital) and a live join/leave tracker
-- **SMS Fallback (simulated):** compressed GPS + summary payload generation for offline scenarios, clearly labeled as a simulation
-- **System Telemetry:** live health dashboard for every dependent service (database, AI gateway, translation, maps)
+### Incidents
+Full searchable, filterable list of every complaint and incident, with live status, risk score, and one-line description — filterable by status, category, and risk level.
 
-### Transparency & Trust
-- No fabricated data, anywhere — every score, every location, every stat shown is computed from real input
-- Clear, honest labeling of what's simulated vs. fully live at every step
-- VERA never claims to have dispatched real emergency services; it prepares and routes information, and is explicit about that boundary
+### Map View
+A dedicated full-page live map (OpenStreetMap + Leaflet, no API key required) showing every incident's exact location, with an in-map detail card per marker.
+
+### Live Feed
+An unfiltered, chronological real-time stream of every incoming report across all civic and emergency channels — the rawest view of what's entering the system right now.
+
+### Video Rooms
+Emergency video coordination channels, automatically provisioned the moment an incident escalates to Critical status (risk ≥ 60). Citizens and responding departments (Police, Municipal, Hospital) join the same room with role-tagged identities.
+
+### Authorities — Dispatch Routing Matrix
+A transparent view of VERA's deterministic category-to-department routing table: each civic category, its responsible department, target SLA, contact details, and how many incidents have been routed to it, with auto-notification status.
+
+### Reports
+An exportable audit and compliance log of every incident, with full filtering (category, status, risk, date range) and one-click CSV export for institutional record-keeping.
+
+### Analytics
+Aggregated civic intelligence computed directly from real database records — total evaluated, average risk score, resolved count, average resolution time, incident inflow over time, risk-level distribution, and category breakdown. No fabricated statistics: any metric without a real computable basis is omitted rather than invented.
+
+### Telemetry
+Live system health for every dependent service — database, AI gateway, translation, and maps — so the platform's own reliability is transparently visible, not just claimed.
+
+### Report Issue (Citizen Portal)
+The citizen-facing entry point: category selection, incident description with voice-to-text input, automatic GPS verification with accuracy display, photo and video evidence upload, and a real-time preview of which department the report will be routed to before submission.
 
 ---
 
@@ -85,11 +78,11 @@ VERA does not claim to physically repair a road or dispatch a real ambulance —
 | Voice Input | Web Speech API (browser-native) |
 | Translation | LibreTranslate (primary), MyMemory Translation API (fallback) |
 | Maps & Geolocation | OpenStreetMap, Leaflet, Nominatim (reverse geocoding), Overpass API (nearby hospital/police search) |
-| Live Video Coordination | Jitsi Meet (embedded, external API) |
+| Live Video Coordination | WebRTC mesh (Jitsi Meet, embedded) |
 | Sharing | Web Share API (native device share sheet) |
 | Hosting (optional) | Vercel/Netlify (frontend), Render/Railway (backend), Cloudflare Tunnel (OmniRoute) |
 
-All services used are free-tier or open-source — no paid API keys are required anywhere in the stack.
+All services used are free-tier or open-source — no paid API keys required anywhere in the stack.
 
 ---
 
@@ -101,76 +94,45 @@ All services used are free-tier or open-source — no paid API keys are required
 - A free [Supabase](https://supabase.com) project
 
 ### 1. Clone and install dependencies
-
 ```bash
 git clone <repository-url>
 cd VERA
-
-cd backend
-npm install
-
-cd ../frontend
-npm install
+cd backend && npm install
+cd ../frontend && npm install
 ```
 
 ### 2. Configure environment variables
-
 ```bash
 cp backend/.env.example backend/.env
 cp frontend/.env.example frontend/.env
 ```
-
-Fill in your real Supabase credentials (`SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`) and OmniRoute configuration (`OMNIROUTE_BASE_URL`, `OMNIROUTE_API_KEY`, `OMNIROUTE_MODEL`) in `backend/.env`. Never commit `.env` files.
-
-Run `database/schema.sql` inside the Supabase SQL Editor to create all required tables and RLS policies.
+Fill in your Supabase credentials and OmniRoute configuration in `backend/.env`. Never commit `.env` files. Run `database/schema.sql` in the Supabase SQL Editor to create all tables and RLS policies.
 
 ### 3. Start OmniRoute
-
 ```bash
 omniroute
 ```
-
 Confirm it reports `api ✓ serving on :20128` before continuing.
 
-### 4. Run the application locally
-
+### 4. Run the application
 ```bash
 # Terminal 1 — backend (port 5000)
-cd backend
-npm run dev
+cd backend && npm run dev
 
 # Terminal 2 — frontend (port 5173)
-cd frontend
-npm run dev
+cd frontend && npm run dev
 ```
-
-Open [http://localhost:5173](http://localhost:5173) in your browser.
+Open [http://localhost:5173](http://localhost:5173).
 
 ### 5. Verify system health
-
 ```bash
 curl http://localhost:5000/api/health
 ```
-
-Expected response:
-```json
-{
-  "status": "ok",
-  "service": "VERA Emergency Response Backend",
-  "services": {
-    "database": "connected",
-    "omniroute": "connected",
-    "translation": "available",
-    "maps": "available"
-  }
-}
-```
-
-You can also check this visually from the app's **Telemetry** page.
+Or check visually via the in-app **Telemetry** page.
 
 ### 6. Try it out
-- Go to **Report Issue**, submit a routine complaint (e.g. "streetlight broken") and confirm it appears on the **Command Center** in real time as a low-risk item.
-- Submit a complaint containing urgent language (e.g. "accident, someone is bleeding and unconscious") and watch it automatically escalate to a Critical Incident, activating the emergency response interface.
+- Submit a routine complaint (e.g. "streetlight broken") from **Report Issue** and watch it appear on the **Command Center** as a low-risk item, routed to the correct department.
+- Submit a complaint with urgent language (e.g. "accident, someone is bleeding and unconscious") and watch it automatically escalate to a Critical Incident, provisioning a live video room.
 
 ---
 
@@ -188,4 +150,4 @@ You can also check this visually from the app's **Telemetry** page.
 
 ## 📌 Note
 
-VERA is a hackathon prototype. Certain features (SMS delivery, department dispatch, role verification for live rooms) are simulated or simplified for demonstration purposes and are clearly labeled as such throughout the application. Production deployment would require integration with real municipal, police, and hospital dispatch systems, which are outside the scope of this prototype.
+VERA is a hackathon prototype. Department notification, dispatch routing, and video-room role identity are simulated/simplified for demonstration and are clearly labeled as such throughout the application. Production deployment would require integration with real municipal, police, and hospital systems, which is outside this prototype's scope.
