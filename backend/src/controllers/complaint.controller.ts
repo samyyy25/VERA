@@ -162,3 +162,19 @@ export const getRecentEvents = async (req: Request, res: Response) => {
     return res.status(500).json({ error: 'Internal Server Error', message: error.message });
   }
 };
+
+export const seedDemoComplaints = async (_req: Request, res: Response) => {
+  try {
+    const result = await complaintStore.seedDemoData();
+    return res.status(200).json({
+      success: true,
+      message: `Successfully seeded ${result.seeded} demo complaints into VERA`,
+      count: result.complaints.length,
+      complaints: result.complaints,
+    });
+  } catch (error: any) {
+    console.error('Error seeding demo data:', error);
+    return res.status(500).json({ error: 'Internal Server Error', message: error.message });
+  }
+};
+

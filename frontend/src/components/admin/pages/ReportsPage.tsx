@@ -105,15 +105,15 @@ export const ReportsPage: React.FC = () => {
   };
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-6 space-y-6 text-[var(--vera-text-primary)]">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 glass-panel rounded-2xl p-5 border border-slate-800">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 vera-card p-5 shadow-xl">
         <div>
           <div className="flex items-center gap-2">
-            <FileText className="w-5 h-5 text-teal-400" />
-            <h2 className="text-xl font-bold text-white">Incident Audit & Compliance Reports</h2>
+            <FileText className="w-5 h-5 text-[var(--brand-primary)]" />
+            <h2 className="text-xl font-bold text-[var(--vera-text-primary)]">Incident Audit & Compliance Reports</h2>
           </div>
-          <p className="text-xs text-slate-400 mt-1">
+          <p className="text-xs text-[var(--vera-text-muted)] mt-1">
             Export comprehensive municipal incident logs and verification records with exact location and audit metadata
           </p>
         </div>
@@ -122,7 +122,7 @@ export const ReportsPage: React.FC = () => {
           <button
             onClick={exportCSV}
             disabled={filteredComplaints.length === 0}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-500 disabled:opacity-50 text-white text-xs font-bold shadow-lg shadow-teal-600/30 transition"
+            className="flex items-center gap-2 px-4 py-2 vera-button-primary disabled:opacity-50 text-xs font-bold shadow-lg transition"
           >
             <Download className="w-4 h-4" />
             <span>Export CSV ({filteredComplaints.length})</span>
@@ -130,23 +130,23 @@ export const ReportsPage: React.FC = () => {
           <button
             onClick={loadData}
             disabled={loading}
-            className="p-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-300 hover:text-white transition"
+            className="p-2.5 rounded-xl vera-button-secondary transition"
           >
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-[var(--brand-primary)]' : ''}`} />
           </button>
         </div>
       </div>
 
       {/* Filters Bar */}
-      <div className="glass-panel rounded-2xl p-4 border border-slate-800 flex flex-col md:flex-row flex-wrap items-stretch md:items-center justify-between gap-3">
+      <div className="vera-card p-4 flex flex-col md:flex-row flex-wrap items-stretch md:items-center justify-between gap-3 shadow-lg">
         <div className="relative flex-1 min-w-[200px]">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+          <Search className="w-4 h-4 text-[var(--vera-text-muted)] absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search report records..."
-            className="w-full bg-slate-900/90 border border-slate-800 rounded-xl pl-10 pr-4 py-2 text-xs sm:text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-teal-500"
+            className="w-full vera-input pl-10 pr-4 py-2 text-xs sm:text-sm"
           />
         </div>
 
@@ -154,7 +154,7 @@ export const ReportsPage: React.FC = () => {
           <select
             value={categoryFilter}
             onChange={(e) => setCategoryFilter(e.target.value)}
-            className="bg-slate-900 border border-slate-800 text-slate-300 text-xs rounded-xl px-3 py-2 focus:outline-none focus:border-teal-500"
+            className="vera-input text-xs py-2 px-3"
           >
             <option value="ALL">All Categories</option>
             <option value="Road damage">Road damage</option>
@@ -173,7 +173,7 @@ export const ReportsPage: React.FC = () => {
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="bg-slate-900 border border-slate-800 text-slate-300 text-xs rounded-xl px-3 py-2 focus:outline-none focus:border-teal-500"
+            className="vera-input text-xs py-2 px-3"
           >
             <option value="ALL">All Statuses</option>
             <option value="Reported">Reported</option>
@@ -186,7 +186,7 @@ export const ReportsPage: React.FC = () => {
           <select
             value={riskFilter}
             onChange={(e) => setRiskFilter(e.target.value)}
-            className="bg-slate-900 border border-slate-800 text-slate-300 text-xs rounded-xl px-3 py-2 focus:outline-none focus:border-teal-500"
+            className="vera-input text-xs py-2 px-3"
           >
             <option value="ALL">All Risk Levels</option>
             <option value="CRITICAL">Critical</option>
@@ -195,21 +195,21 @@ export const ReportsPage: React.FC = () => {
             <option value="LOW">Low</option>
           </select>
 
-          <div className="flex items-center gap-1 bg-slate-900 border border-slate-800 rounded-xl px-2 py-1 text-xs">
-            <Calendar className="w-3.5 h-3.5 text-slate-400" />
+          <div className="flex items-center gap-1.5 vera-card-secondary px-3 py-1.5 text-xs">
+            <Calendar className="w-3.5 h-3.5 text-[var(--brand-primary)]" />
             <input
               type="date"
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
-              className="bg-transparent text-slate-300 text-xs focus:outline-none"
+              className="bg-transparent text-[var(--vera-text-primary)] text-xs focus:outline-none"
               title="Start Date"
             />
-            <span className="text-slate-500">-</span>
+            <span className="text-[var(--vera-text-muted)]">-</span>
             <input
               type="date"
               value={endDate}
               onChange={(e) => setEndDate(e.target.value)}
-              className="bg-transparent text-slate-300 text-xs focus:outline-none"
+              className="bg-transparent text-[var(--vera-text-primary)] text-xs focus:outline-none"
               title="End Date"
             />
           </div>
@@ -217,58 +217,58 @@ export const ReportsPage: React.FC = () => {
       </div>
 
       {/* Reports Table */}
-      <div className="glass-panel rounded-2xl border border-slate-800 overflow-hidden">
+      <div className="vera-card overflow-hidden shadow-2xl">
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-xs">
+          <table className="vera-table">
             <thead>
-              <tr className="bg-slate-900/90 border-b border-slate-800 text-slate-400 uppercase font-semibold text-[10px] tracking-wider">
-                <th className="p-4">Report Date</th>
-                <th className="p-4">Incident ID</th>
-                <th className="p-4">Category</th>
-                <th className="p-4">Risk</th>
-                <th className="p-4">Status</th>
-                <th className="p-4">Location</th>
-                <th className="p-4">Assigned Department</th>
+              <tr>
+                <th>Report Date</th>
+                <th>Incident ID</th>
+                <th>Category</th>
+                <th>Risk</th>
+                <th>Status</th>
+                <th>Location</th>
+                <th>Assigned Department</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800/60">
+            <tbody className="divide-y divide-[var(--vera-border)]">
               {filteredComplaints.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="p-10 text-center text-slate-500">
+                  <td colSpan={7} className="p-10 text-center text-[var(--vera-text-muted)]">
                     No complaints matching the selected filters.
                   </td>
                 </tr>
               ) : (
                 filteredComplaints.map((c) => (
-                  <tr key={c.id} className="hover:bg-slate-800/40 transition">
-                    <td className="p-4 whitespace-nowrap text-slate-400 text-[11px] font-mono">
+                  <tr key={c.id} className="hover:bg-[var(--vera-surface-secondary)] transition">
+                    <td className="p-4 whitespace-nowrap text-[var(--vera-text-muted)] text-[11px] font-mono">
                       {new Date(c.created_at).toLocaleDateString()} {new Date(c.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </td>
-                    <td className="p-4 whitespace-nowrap font-mono font-medium text-teal-400">
+                    <td className="p-4 whitespace-nowrap font-mono font-bold text-[var(--brand-primary)]">
                       {c.id.slice(0, 8)}
                     </td>
-                    <td className="p-4 text-slate-200 font-semibold">
+                    <td className="p-4 font-semibold text-[var(--vera-text-primary)]">
                       {c.category}
                     </td>
                     <td className="p-4 whitespace-nowrap font-mono">
                       <span
                         className="px-2 py-0.5 rounded text-[10px] font-bold inline-flex items-center gap-1"
                         style={{
-                          backgroundColor: (c.risk_level === 'CRITICAL' ? '#ef4444' : c.risk_level === 'HIGH' ? '#f97316' : c.risk_level === 'MEDIUM' ? '#f59e0b' : '#10b981') + '22',
-                          color: c.risk_level === 'CRITICAL' ? '#ef4444' : c.risk_level === 'HIGH' ? '#f97316' : c.risk_level === 'MEDIUM' ? '#f59e0b' : '#10b981',
-                          border: `1px solid ${(c.risk_level === 'CRITICAL' ? '#ef4444' : c.risk_level === 'HIGH' ? '#f97316' : c.risk_level === 'MEDIUM' ? '#f59e0b' : '#10b981')}44`,
+                          backgroundColor: (c.risk_level === 'CRITICAL' ? '#D45060' : c.risk_level === 'HIGH' ? '#D97706' : c.risk_level === 'MEDIUM' ? '#800020' : '#10B981') + '22',
+                          color: c.risk_level === 'CRITICAL' ? '#D45060' : c.risk_level === 'HIGH' ? '#D97706' : c.risk_level === 'MEDIUM' ? '#800020' : '#10B981',
+                          border: `1px solid ${(c.risk_level === 'CRITICAL' ? '#D45060' : c.risk_level === 'HIGH' ? '#D97706' : c.risk_level === 'MEDIUM' ? '#800020' : '#10B981')}44`,
                         }}
                       >
                         {c.risk_score}/100 · {c.risk_level}
                       </span>
                     </td>
                     <td className="p-4 whitespace-nowrap">
-                      <span className="text-slate-300">{c.status}</span>
+                      <span className="text-[var(--vera-text-secondary)]">{c.status}</span>
                     </td>
-                    <td className="p-4 max-w-xs text-slate-400 truncate">
+                    <td className="p-4 max-w-xs text-[var(--vera-text-muted)] truncate">
                       {c.address || `${c.latitude.toFixed(4)}, ${c.longitude.toFixed(4)}`}
                     </td>
-                    <td className="p-4 whitespace-nowrap text-slate-300 text-xs">
+                    <td className="p-4 whitespace-nowrap text-[var(--vera-text-secondary)] text-xs">
                       {c.routed_department || 'General Helpdesk'}
                     </td>
                   </tr>

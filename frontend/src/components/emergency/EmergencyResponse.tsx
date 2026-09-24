@@ -1,186 +1,155 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Circle, useMap } from 'react-leaflet';
-import L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
+import React, { useState, useEffect, useRef } from 'react';
+import { Complaint, ResponsePlan } from '../../types';
 import {
   Mic,
   MicOff,
   Languages,
-  MapPin,
-  Hospital,
-  ShieldAlert,
   Radio,
-  AlertTriangle,
-  CheckCircle2,
-  Clock,
-  ChevronRight,
   Copy,
   Loader2,
-  Wifi,
-  WifiOff,
-  Navigation,
-  PhoneCall,
   Video,
+  X,
+  MessageSquare,
+  Activity,
+  CheckCircle2,
 } from 'lucide-react';
 import {
   getTriageQuestion,
   generateResponderSummary,
   translateText,
-  fetchEmergencyPackage,
   ChatMessage,
-  ResponderLocation,
+  fetchResponsePlan,
 } from '../../services/api';
-import { Complaint } from '../../types';
+import { IncidentIntelligenceCard } from './IncidentIntelligenceCard';
+import { ResponsePlanCard } from './ResponsePlanCard';
+import { TacticalMap } from './TacticalMap';
+import { IncidentTimelineCard } from './IncidentTimelineCard';
+import { LiveIncidentUpdates } from './LiveIncidentUpdates';
 import { JitsiRoomModal } from './JitsiRoomModal';
-
-
-// Fix Leaflet default icon paths broken by bundlers
-delete (L.Icon.Default.prototype as any)._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
-  iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-  shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
-});
-
-// Custom marker icons
-const createIcon = (color: string, emoji: string) =>
-  L.divIcon({
-    className: '',
-    html: `<div style="background:${color};width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.5)">${emoji}</div>`,
-    iconSize: [36, 36],
-    iconAnchor: [18, 18],
-    popupAnchor: [0, -20],
-  });
-
-const incidentIcon = createIcon('#ef4444', '🚨');
-const hospitalIcon = createIcon('#10b981', '🏥');
-const policeIcon = createIcon('#3b82f6', '👮');
-
-// Auto-center map on coordinates change
-function MapController({ lat, lon }: { lat: number; lon: number }) {
-  const map = useMap();
-  useEffect(() => {
-    map.setView([lat, lon], 15);
-  }, [lat, lon, map]);
-  return null;
-}
 
 interface EmergencyResponseProps {
   complaint: Complaint;
   onClose: () => void;
+  onComplaintUpdated?: (complaint: Complaint) => void;
 }
 
-type TriagePhase = 'loading' | 'active' | 'complete';
+export const EmergencyResponse: React.FC<EmergencyResponseProps> = ({
+  complaint: initialComplaint,
+  onClose,
+  onComplaintUpdated,
+}) => {
+  const [complaint, setComplaint] = useState<Complaint>(initialComplaint);
+  const [responsePlan, setResponsePlan] = useState<ResponsePlan | null>(
+    initialComplaint.response_plan || null
+  );
 
-export const EmergencyResponse: React.FC<EmergencyResponseProps> = ({ complaint, onClose }) => {
-  // ─── State ───────────────────────────────────────────────────────────────────
-  const [triagePhase, setTriagePhase] = useState<TriagePhase>('loading');
+  // Active View Tab: 'orchestrator' | 'updates' | 'triage'
+  const [activeTab, setActiveTab] = useState<'orchestrator' | 'updates' | 'triage'>('orchestrator');
+
+  // AI Triage State
   const [conversationHistory, setConversationHistory] = useState<ChatMessage[]>([]);
   const [currentQuestion, setCurrentQuestion] = useState('');
   const [userVoiceInput, setUserVoiceInput] = useState('');
   const [isListening, setIsListening] = useState(false);
-  const [aiSource, setAiSource] = useState<'omniroute' | 'rule_fallback' | null>(null);
+  const [triageLoading, setTriageLoading] = useState(false);
 
-  // Translation
+  // Translation State
   const [translatedText, setTranslatedText] = useState('');
-  const [translationService, setTranslationService] = useState('');
   const [isTranslating, setIsTranslating] = useState(false);
   const [sourceLang, setSourceLang] = useState('auto');
 
-  // Map / POIs
-  const [hospital, setHospital] = useState<ResponderLocation | null>(null);
-  const [policeStation, setPoliceStation] = useState<ResponderLocation | null>(null);
-  const [poiSource, setPoiSource] = useState<string>('');
-  const [loadingPOI, setLoadingPOI] = useState(true);
-
-  // Responder Summary
+  // Summary State
   const [responderSummary, setResponderSummary] = useState('');
   const [generatingSummary, setGeneratingSummary] = useState(false);
-  const [summaryReady, setSummaryReady] = useState(false);
+  const [copiedSummary, setCopiedSummary] = useState(false);
 
-  // SMS
-  const [smsPayload, setSmsPayload] = useState('');
-  const [smsCopied, setSmsCopied] = useState(false);
-
-  // Live Jitsi Video Room (Section 41)
-  const [showJitsi, setShowJitsi] = useState<boolean>(false);
-
-  // Timeline
-  const [timeline, setTimeline] = useState<{ time: string; event: string; icon: string }[]>([]);
-
+  // Jitsi Video Modal
+  const [showJitsi, setShowJitsi] = useState(false);
 
   const recognitionRef = useRef<any>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
-  const addTimelineEvent = useCallback((event: string, icon: string) => {
-    setTimeline(prev => [
-      ...prev,
-      { time: new Date().toLocaleTimeString(), event, icon },
-    ]);
-  }, []);
-
-  // ─── Init: Load first triage question + POIs ──────────────────────────────
+  // ─── Fetch or Generate Response Plan on Mount ──────────────────────────────
   useEffect(() => {
-    addTimelineEvent('Emergency incident detected and escalated', '🚨');
-    addTimelineEvent(`GPS acquired: ${complaint.latitude.toFixed(5)}, ${complaint.longitude.toFixed(5)}`, '📍');
-    loadFirstQuestion();
-    loadPOIs();
-  }, []);
+    if (!responsePlan) {
+      fetchResponsePlan(complaint.id)
+        .then(res => {
+          if (res.plan) {
+            setResponsePlan(res.plan);
+          }
+        })
+        .catch(err => console.warn('Could not load existing response plan:', err));
+    }
+  }, [complaint.id]);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [conversationHistory, currentQuestion]);
 
-  const loadFirstQuestion = async () => {
-    setTriagePhase('loading');
-    try {
-      const res = await getTriageQuestion(complaint.category, complaint.description, []);
-      setCurrentQuestion(res.data.message);
-      setAiSource(res.data.source);
-      setTriagePhase('active');
-      addTimelineEvent('AI triage dispatcher activated', '🤖');
-    } catch {
-      setCurrentQuestion('Are you or anyone nearby in immediate danger right now?');
-      setTriagePhase('active');
-    }
-  };
-
-  const loadPOIs = async () => {
-    setLoadingPOI(true);
-    try {
-      const pkg = await fetchEmergencyPackage(
-        complaint.latitude,
-        complaint.longitude,
-        complaint.category,
-        complaint.risk_score,
-        complaint.description
-      );
-      if (pkg.data) {
-        setHospital(pkg.data.hospital);
-        setPoliceStation(pkg.data.policeStation);
-        setPoiSource(pkg.data.source);
-        addTimelineEvent(
-          pkg.data.hospital
-            ? `Nearest hospital found: ${pkg.data.hospital.name} (${(pkg.data.hospital.distance_meters / 1000).toFixed(1)} km)`
-            : 'Hospital search: none found within 5 km',
-          '🏥'
-        );
-        addTimelineEvent(
-          pkg.data.policeStation
-            ? `Nearest station found: ${pkg.data.policeStation.name} (${(pkg.data.policeStation.distance_meters / 1000).toFixed(1)} km)`
-            : 'Police station search: none found within 5 km',
-          '👮'
-        );
+  // ─── Triage Questions ───────────────────────────────────────────────────────
+  const startTriage = async () => {
+    setActiveTab('triage');
+    if (conversationHistory.length === 0 && !currentQuestion) {
+      setTriageLoading(true);
+      try {
+        const res = await getTriageQuestion(complaint.category, complaint.description, []);
+        setCurrentQuestion(res.data.message);
+      } catch {
+        setCurrentQuestion('Are you or anyone nearby in immediate danger right now?');
+      } finally {
+        setTriageLoading(false);
       }
-      if (pkg.smsPayload) setSmsPayload(pkg.smsPayload.rawPayload);
-    } catch {
-      addTimelineEvent('Overpass POI search: timeout (offline mode)', '⚠️');
-    } finally {
-      setLoadingPOI(false);
     }
   };
 
-  // ─── Voice Recognition ────────────────────────────────────────────────────
+  const submitTriageResponse = async () => {
+    if (!userVoiceInput.trim()) return;
+
+    const userMsg: ChatMessage = { role: 'user', content: userVoiceInput };
+    const assistantMsg: ChatMessage = { role: 'assistant', content: currentQuestion };
+    const newHistory = [...conversationHistory, assistantMsg, userMsg];
+
+    setConversationHistory(newHistory);
+    setUserVoiceInput('');
+    setCurrentQuestion('');
+
+    if (newHistory.filter(m => m.role === 'user').length >= 3) {
+      handleGenerateSummary(newHistory);
+    } else {
+      setTriageLoading(true);
+      try {
+        const res = await getTriageQuestion(complaint.category, complaint.description, newHistory);
+        setCurrentQuestion(res.data.message);
+      } catch {
+        setCurrentQuestion('Is anyone injured or in need of an ambulance?');
+      } finally {
+        setTriageLoading(false);
+      }
+    }
+  };
+
+  const handleGenerateSummary = async (history: ChatMessage[]) => {
+    setGeneratingSummary(true);
+    try {
+      const res = await generateResponderSummary(
+        complaint.category,
+        complaint.description,
+        history,
+        complaint.address || undefined
+      );
+      setResponderSummary(res.summary);
+    } catch {
+      setResponderSummary(
+        `INCIDENT SUMMARY: ${complaint.category} reported at ${complaint.address || 'GPS Coordinates'}. Urgency: ${
+          complaint.risk_score
+        }/100. Emergency units dispatched.`
+      );
+    } finally {
+      setGeneratingSummary(false);
+    }
+  };
+
+  // ─── Voice Input Handler ───────────────────────────────────────────────────
   const startListening = () => {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) return;
@@ -205,15 +174,13 @@ export const EmergencyResponse: React.FC<EmergencyResponseProps> = ({ complaint,
     setIsListening(false);
   };
 
-  // ─── Translation ──────────────────────────────────────────────────────────
+  // ─── Translation Handler ───────────────────────────────────────────────────
   const handleTranslate = async (text: string) => {
     if (!text.trim()) return;
     setIsTranslating(true);
     try {
       const res = await translateText(text, 'en', sourceLang);
       setTranslatedText(res.data.translatedText);
-      setTranslationService(res.data.service);
-      addTimelineEvent('Multilingual translation processed', '🌐');
     } catch {
       setTranslatedText(text);
     } finally {
@@ -221,452 +188,375 @@ export const EmergencyResponse: React.FC<EmergencyResponseProps> = ({ complaint,
     }
   };
 
-  // ─── Submit User Response to Triage ──────────────────────────────────────
-  const submitResponse = async () => {
-    if (!userVoiceInput.trim()) return;
+  const copySummary = () => {
+    if (!responderSummary) return;
+    navigator.clipboard.writeText(responderSummary);
+    setCopiedSummary(true);
+    setTimeout(() => setCopiedSummary(false), 2500);
+  };
 
-    const userMsg: ChatMessage = { role: 'user', content: userVoiceInput };
-    const assistantMsg: ChatMessage = { role: 'assistant', content: currentQuestion };
-
-    const newHistory = [...conversationHistory, assistantMsg, userMsg];
-    setConversationHistory(newHistory);
-
-    // Translate user's response
-    await handleTranslate(userVoiceInput);
-    addTimelineEvent(`Victim response received: "${userVoiceInput.substring(0, 40)}..."`, '🗣️');
-
-    setUserVoiceInput('');
-    setCurrentQuestion('');
-
-    if (newHistory.filter(m => m.role === 'user').length >= 4) {
-      // Enough data — generate final summary
-      setTriagePhase('complete');
-      handleGenerateSummary(newHistory);
-    } else {
-      // Next triage question
-      setTriagePhase('loading');
-      try {
-        const res = await getTriageQuestion(complaint.category, complaint.description, newHistory);
-        setCurrentQuestion(res.data.message);
-        setAiSource(res.data.source);
-        setTriagePhase('active');
-      } catch {
-        setTriagePhase('complete');
-        handleGenerateSummary(newHistory);
-      }
+  const handlePlanUpdated = (updatedComp: Complaint, updatedPlan: ResponsePlan) => {
+    setComplaint(updatedComp);
+    setResponsePlan(updatedPlan);
+    if (onComplaintUpdated) {
+      onComplaintUpdated(updatedComp);
     }
   };
 
-  const handleGenerateSummary = async (history: ChatMessage[]) => {
-    setGeneratingSummary(true);
-    addTimelineEvent('Generating Emergency Responder Summary…', '📋');
-    try {
-      const res = await generateResponderSummary(
-        complaint.category,
-        complaint.description,
-        history,
-        complaint.address || undefined
-      );
-      setResponderSummary(res.summary);
-      setSummaryReady(true);
-      addTimelineEvent('Emergency Responder Summary ready', '✅');
-    } catch {
-      setResponderSummary(
-        `SITUATION: ${complaint.category.toUpperCase()} at ${complaint.address || 'GPS location'}.\nDETAILS: ${complaint.description}\nACTION: Immediate on-ground verification required.`
-      );
-      setSummaryReady(true);
-    } finally {
-      setGeneratingSummary(false);
-    }
-  };
-
-  const copySMS = () => {
-    navigator.clipboard.writeText(smsPayload);
-    setSmsCopied(true);
-    setTimeout(() => setSmsCopied(false), 2000);
-  };
-
-  // ─── UI Helpers ───────────────────────────────────────────────────────────
-  const distKm = (m: number) => (m / 1000).toFixed(1);
-
-  // ─────────────────────────────────────────────────────────────────────────
   return (
-    <div className="vera-emergency-overlay">
-      {/* Live Jitsi Room Modal (Section 41 & 44) */}
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-[#090e13]/95 backdrop-blur-md p-3 sm:p-6 text-[#edf5f2] flex flex-col">
+      {/* Top Banner Navigation Matching Canva Template */}
+      <div className="max-w-7xl w-full mx-auto flex items-center justify-between pb-4 mb-4 border-b border-[#172329]">
+        <div className="flex items-center space-x-3">
+          <div className="p-2.5 rounded-xl bg-[#152a27] text-[#2bb59a] border border-[#0f5c4a] animate-pulse">
+            <Radio className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h2 className="text-lg font-black text-[#edf5f2] tracking-tight">
+                VERA Response Orchestrator
+              </h2>
+              <span className="px-2 py-0.5 rounded text-[10px] font-mono uppercase bg-[#101a20] text-[#91a39e] border border-[#172329]">
+                02 · VR-{complaint.id.slice(0, 4)}
+              </span>
+            </div>
+            <p className="text-xs text-[#91a39e]">Hazard assessment, AI voice triage, and multi-agency response coordination</p>
+          </div>
+        </div>
+
+        {/* Action Controls */}
+        <div className="flex items-center gap-2 sm:gap-3">
+          {/* View Mode Toggle */}
+          <div className="bg-[#101a20] border border-[#172329] rounded-xl p-1 flex items-center text-xs">
+            <button
+              onClick={() => setActiveTab('orchestrator')}
+              className={`px-3 py-1.5 rounded-lg font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                activeTab === 'orchestrator'
+                  ? 'bg-[#0f5c4a] text-white shadow-sm'
+                  : 'text-[#91a39e] hover:text-[#edf5f2]'
+              }`}
+            >
+              <Activity className="w-3.5 h-3.5" /> Response Plan
+            </button>
+            <button
+              onClick={() => setActiveTab('updates')}
+              className={`px-3 py-1.5 rounded-lg font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                activeTab === 'updates'
+                  ? 'bg-[#0f5c4a] text-white shadow-sm'
+                  : 'text-[#91a39e] hover:text-[#edf5f2]'
+              }`}
+            >
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              <span>Live Updates</span>
+              {complaint.updates && complaint.updates.length > 0 && (
+                <span className="px-1.5 py-0.2 text-[9px] rounded-full bg-[#152a27] text-[#6ee7b7] border border-[#0f5c4a]">
+                  {complaint.updates.length}
+                </span>
+              )}
+            </button>
+            <button
+              onClick={startTriage}
+              className={`px-3 py-1.5 rounded-lg font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                activeTab === 'triage'
+                  ? 'bg-[#0f5c4a] text-white shadow-sm'
+                  : 'text-[#91a39e] hover:text-[#edf5f2]'
+              }`}
+            >
+              <MessageSquare className="w-3.5 h-3.5" /> Voice Triage
+            </button>
+          </div>
+
+          {/* Jitsi Video Coordination Room */}
+          <button
+            onClick={() => setShowJitsi(true)}
+            className="px-3 py-2 rounded-xl bg-[#3b2024] hover:bg-[#532326] border border-[#ef6464]/40 text-[#ffaaa8] font-bold text-xs flex items-center gap-1.5 transition cursor-pointer shadow-md"
+          >
+            <Video className="w-4 h-4 text-[#ffaaa8]" />
+            <span className="hidden sm:inline">Live Room</span>
+          </button>
+
+          {/* Close Modal */}
+          <button
+            onClick={onClose}
+            className="p-2 rounded-xl bg-[#101a20] hover:bg-[#172329] border border-[#172329] text-[#91a39e] hover:text-[#edf5f2] transition cursor-pointer"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+      </div>
+
+      {/* Main Content Area */}
+      <div className="max-w-7xl w-full mx-auto flex-1">
+        {activeTab === 'orchestrator' ? (
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            {/* Left Column: Incident Intelligence & Response Plan (7 cols) */}
+            <div className="lg:col-span-7 space-y-6">
+              <IncidentIntelligenceCard complaint={complaint} />
+              <ResponsePlanCard
+                complaint={complaint}
+                plan={responsePlan}
+                onPlanUpdated={handlePlanUpdated}
+              />
+            </div>
+
+            {/* Right Column: Tactical Live Map & Operational Timeline (5 cols) */}
+            <div className="lg:col-span-5 space-y-6">
+              <div>
+                <div className="text-xs font-bold uppercase tracking-wider text-[#91a39e] mb-2 flex items-center justify-between">
+                  <span>Tactical Multi-Pin Map</span>
+                  <span className="text-[10px] text-[#2bb59a] font-normal">Real-Time Routing &amp; ETAs</span>
+                </div>
+                <TacticalMap complaint={complaint} plan={responsePlan} height="360px" />
+              </div>
+
+              <IncidentTimelineCard complaint={complaint} />
+            </div>
+          </div>
+        ) : activeTab === 'updates' ? (
+          /* Live Incident Updates Feed & Activity Hub */
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            {/* Left: Full Interactive Live Feed (7 cols) */}
+            <div className="lg:col-span-7 space-y-4">
+              <LiveIncidentUpdates
+                complaint={complaint}
+                onUpdateAdded={(updated) => {
+                  setComplaint(updated);
+                  if (onComplaintUpdated) onComplaintUpdated(updated);
+                }}
+              />
+            </div>
+
+            {/* Right: Tactical Context & Summary (5 cols) */}
+            <div className="lg:col-span-5 space-y-5">
+              <IncidentIntelligenceCard complaint={complaint} />
+              <div>
+                <div className="text-xs font-bold uppercase tracking-wider text-[#91a39e] mb-2 flex items-center justify-between">
+                  <span>Incident Scene Location</span>
+                  <span className="text-[10px] text-[#2bb59a] font-mono">
+                    {complaint.latitude?.toFixed(4)}, {complaint.longitude?.toFixed(4)}
+                  </span>
+                </div>
+                <TacticalMap complaint={complaint} plan={responsePlan} height="300px" />
+              </div>
+            </div>
+          </div>
+        ) : (
+          /* Voice Triage & AI Dispatcher View */
+          <div className="space-y-4">
+            {/* 5-Step Pipeline Badges Matching Canva Template */}
+            <div className="bg-[#101a20] rounded-2xl p-4 border border-[#172329] grid grid-cols-2 sm:grid-cols-5 gap-2 text-center text-xs">
+              <div className="p-2.5 rounded-xl bg-[#0d151a] border border-[#20312f] text-[#6ee7b7]">
+                <div className="text-[10px] font-bold text-[#91a39e]">Step 1</div>
+                <div className="font-bold mt-0.5">1 &bull; Capture</div>
+                <div className="text-[9px] text-[#7f938d]">Voice or text ingest</div>
+              </div>
+              <div className="p-2.5 rounded-xl bg-[#0d151a] border border-[#20312f] text-[#6ee7b7]">
+                <div className="text-[10px] font-bold text-[#91a39e]">Step 2</div>
+                <div className="font-bold mt-0.5">2 &bull; Detect</div>
+                <div className="text-[9px] text-[#7f938d]">Language &amp; hazard cues</div>
+              </div>
+              <div className="p-2.5 rounded-xl bg-[#0d151a] border border-[#20312f] text-[#6ee7b7]">
+                <div className="text-[10px] font-bold text-[#91a39e]">Step 3</div>
+                <div className="font-bold mt-0.5">3 &bull; Clarify</div>
+                <div className="text-[9px] text-[#7f938d]">Necessary Q&amp;A only</div>
+              </div>
+              <div className="p-2.5 rounded-xl bg-[#0d151a] border border-[#20312f] text-[#6ee7b7]">
+                <div className="text-[10px] font-bold text-[#91a39e]">Step 4</div>
+                <div className="font-bold mt-0.5">4 &bull; Summarize</div>
+                <div className="text-[9px] text-[#7f938d]">Structured packet</div>
+              </div>
+              <div className="p-2.5 rounded-xl bg-[#0d151a] border border-[#0f5c4a] text-[#2bb59a]">
+                <div className="text-[10px] font-bold text-[#91a39e]">Step 5</div>
+                <div className="font-bold mt-0.5">5 &bull; Approve</div>
+                <div className="text-[9px] text-[#7f938d]">Human authority action</div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+              {/* Left Column: Triage Q&A Conversation */}
+              <div className="lg:col-span-7 bg-[#101a20] border border-[#172329] rounded-2xl p-5 flex flex-col h-[560px]">
+                <div className="flex items-center justify-between pb-3 mb-3 border-b border-[#172329]">
+                  <div className="flex items-center gap-2">
+                    <MessageSquare className="w-4 h-4 text-[#2bb59a]" />
+                    <h3 className="text-sm font-black uppercase tracking-wider text-[#edf5f2]">
+                      AI Emergency Triage Channel
+                    </h3>
+                  </div>
+                  <span className="text-xs text-[#91a39e]">Voice Triage Protocol Active</span>
+                </div>
+
+                {/* Chat Conversation */}
+                <div className="flex-1 overflow-y-auto space-y-3 pr-2 mb-4">
+                  <div className="bg-[#0d151a] border border-[#172329] rounded-xl p-3.5 text-xs text-[#edf5f2]">
+                    <div className="font-bold text-[#2bb59a] mb-1">VERA DISPATCH INTAKE</div>
+                    {complaint.description}
+                  </div>
+
+                  {conversationHistory.map((msg, idx) => (
+                    <div
+                      key={idx}
+                      className={`p-3 rounded-xl text-xs leading-relaxed max-w-[85%] ${
+                        msg.role === 'user'
+                          ? 'ml-auto bg-[#152a27] border border-[#0f5c4a] text-[#eaf8f4]'
+                          : 'bg-[#0d151a] border border-[#172329] text-[#edf5f2]'
+                      }`}
+                    >
+                      <div className="font-bold text-[10px] uppercase tracking-wider mb-1 text-[#91a39e]">
+                        {msg.role === 'user' ? 'Victim / Citizen' : 'VERA Triage Assistant'}
+                      </div>
+                      {msg.content}
+                    </div>
+                  ))}
+
+                  {triageLoading && (
+                    <div className="flex items-center gap-2 text-xs text-[#91a39e] p-2">
+                      <Loader2 className="w-4 h-4 animate-spin text-[#2bb59a]" />
+                      <span>Analyzing statement &amp; generating triage prompt...</span>
+                    </div>
+                  )}
+
+                  {currentQuestion && !triageLoading && (
+                    <div className="bg-[#152a27] border border-[#0f5c4a] rounded-xl p-3.5 text-xs text-[#edf5f2] animate-fade-in shadow-lg">
+                      <div className="font-bold text-[#2bb59a] mb-1 flex items-center gap-1.5">
+                        <Radio className="w-3.5 h-3.5 animate-pulse text-[#2bb59a]" />
+                        VERA AI TRIAGE PROMPT
+                      </div>
+                      <p className="text-sm text-[#edf5f2] font-medium">{currentQuestion}</p>
+                    </div>
+                  )}
+
+                  <div ref={chatEndRef} />
+                </div>
+
+                {/* Input & Voice Controls */}
+                <div className="pt-3 border-t border-[#172329]">
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={userVoiceInput}
+                      onChange={e => setUserVoiceInput(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && submitTriageResponse()}
+                      placeholder="Speak or type response for responders..."
+                      className="flex-1 bg-[#0d151a] border border-[#172329] rounded-xl px-3.5 py-2.5 text-xs text-[#edf5f2] placeholder-[#7f938d] focus:outline-none focus:border-[#2bb59a]"
+                    />
+
+                    <button
+                      onClick={isListening ? stopListening : startListening}
+                      className={`p-2.5 rounded-xl border transition cursor-pointer flex items-center justify-center ${
+                        isListening
+                          ? 'bg-[#ef6464] border-[#ef6464] text-white animate-pulse'
+                          : 'bg-[#152a27] border-[#0f5c4a] text-[#2bb59a] hover:bg-[#1a3834]'
+                      }`}
+                      title={isListening ? 'Stop recording' : 'Speak response'}
+                    >
+                      {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+                    </button>
+
+                    <button
+                      onClick={submitTriageResponse}
+                      disabled={!userVoiceInput.trim()}
+                      className="px-4 py-2.5 bg-[#0f5c4a] hover:bg-[#14745e] disabled:opacity-50 text-white text-xs font-bold rounded-xl uppercase tracking-wider transition cursor-pointer"
+                    >
+                      Send
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Right Column: Responder Summary & Translations */}
+              <div className="lg:col-span-5 space-y-5">
+                {/* Multilingual Translation */}
+                <div className="bg-[#101a20] border border-[#172329] rounded-2xl p-4">
+                  <div className="flex items-center justify-between mb-3 pb-2 border-b border-[#172329]">
+                    <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-[#edf5f2]">
+                      <Languages className="w-4 h-4 text-[#2bb59a]" /> Multilingual Audio / Text Ingest
+                    </div>
+                    <select
+                      value={sourceLang}
+                      onChange={e => setSourceLang(e.target.value)}
+                      className="bg-[#0d151a] border border-[#172329] rounded-lg px-2 py-1 text-[11px] text-[#edf5f2] focus:outline-none"
+                    >
+                      <option value="auto">Auto Detect</option>
+                      <option value="hi">हिन्दी (Hindi)</option>
+                      <option value="as">অসমীয়া (Assamese)</option>
+                      <option value="bn">বাংলা (Bengali)</option>
+                      <option value="ta">தமிழ் (Tamil)</option>
+                      <option value="te">తెలుగు (Telugu)</option>
+                      <option value="en">English</option>
+                    </select>
+                  </div>
+
+                  <div className="text-xs text-[#91a39e]">
+                    <button
+                      onClick={() => handleTranslate(userVoiceInput || complaint.description)}
+                      disabled={isTranslating}
+                      className="w-full py-2 bg-[#152a27] hover:bg-[#1a3834] border border-[#0f5c4a] rounded-xl text-[#2bb59a] text-xs font-bold mb-2 transition cursor-pointer"
+                    >
+                      {isTranslating ? 'Translating to English...' : 'Translate to English Dispatch'}
+                    </button>
+                    {translatedText && (
+                      <div className="bg-[#0d151a] p-3 rounded-xl border border-[#172329] text-[#edf5f2] leading-relaxed text-xs">
+                        {translatedText}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Responder Summary Card */}
+                <div className="bg-[#101a20] border border-[#172329] rounded-2xl p-5">
+                  <div className="flex items-center justify-between mb-3 pb-2 border-b border-[#172329]">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-[#edf5f2]">
+                      Live Dispatch Summary Packet
+                    </h4>
+                    {responderSummary && (
+                      <button
+                        onClick={copySummary}
+                        className="text-xs text-[#2bb59a] hover:text-[#6ee7b7] flex items-center gap-1 font-semibold cursor-pointer"
+                      >
+                        {copiedSummary ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                        {copiedSummary ? 'Copied' : 'Copy Packet'}
+                      </button>
+                    )}
+                  </div>
+
+                  {generatingSummary ? (
+                    <div className="py-8 text-center text-xs text-[#91a39e]">
+                      <Loader2 className="w-5 h-5 animate-spin mx-auto mb-2 text-[#2bb59a]" />
+                      Generating operational dispatch briefing...
+                    </div>
+                  ) : responderSummary ? (
+                    <div className="bg-[#0d151a] p-3.5 rounded-xl border border-[#172329] text-xs text-[#edf5f2] leading-relaxed font-mono whitespace-pre-line">
+                      {responderSummary}
+                    </div>
+                  ) : (
+                    <div className="py-6 text-center text-xs text-[#7f938d]">
+                      Complete 3 triage prompts or tap below to generate an operational briefing packet.
+                    </div>
+                  )}
+
+                  {!generatingSummary && (
+                    <button
+                      onClick={() => handleGenerateSummary(conversationHistory)}
+                      className="w-full mt-3 py-2 bg-[#152a27] hover:bg-[#1a3834] border border-[#0f5c4a] rounded-xl text-xs font-bold text-[#2bb59a] transition cursor-pointer"
+                    >
+                      Generate Dispatch Briefing
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Embedded Jitsi Live Room Modal */}
       {showJitsi && (
         <JitsiRoomModal
           roomName={`vera-incident-${complaint.id.slice(0, 8)}`}
-          incidentTitle={`${complaint.category} (Risk ${complaint.risk_score}/100)`}
-          defaultRole={
-            complaint.category === 'Medical Emergency'
-              ? 'Hospital / Medical Responder'
-              : complaint.category === 'Accident' || complaint.category === 'Harassment'
-              ? 'Police Responder'
-              : 'Municipal Responder'
-          }
-          defaultName="On-Duty Dispatcher"
-          onClose={() => {
-            setShowJitsi(false);
-          }}
-          onParticipantUpdate={(parts) => {
-            if (parts.length > 0) {
-              addTimelineEvent(`Active in video room (${parts.length}): ${parts.join(', ')}`, '👥');
-            }
-          }}
-          onLogTimelineEvent={(msg, icon) => {
-            addTimelineEvent(msg, icon || '🎥');
-          }}
+          incidentTitle={`${complaint.category} (${complaint.risk_level})`}
+          onClose={() => setShowJitsi(false)}
         />
       )}
-
-
-      {/* Header */}
-      <div className="vera-emg-header">
-        <div className="vera-emg-header-left">
-          <span className="vera-pulse-dot" />
-          <span className="vera-emg-badge">🚨 EMERGENCY RESPONSE ACTIVE</span>
-          <span className="vera-emg-risk">Risk {complaint.risk_score}/100 · {complaint.risk_level}</span>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <button
-            onClick={() => {
-              setShowJitsi(true);
-              addTimelineEvent('Emergency live video session initiated via Jitsi', '🎥');
-            }}
-            className="vera-emg-close"
-            style={{ background: 'rgba(239, 68, 68, 0.4)', borderColor: '#ef4444', color: '#ffffff', display: 'flex', alignItems: 'center', gap: '4px' }}
-          >
-            <Video size={14} /> Join Live Video Room
-          </button>
-          <button onClick={onClose} className="vera-emg-close">✕ Close</button>
-        </div>
-      </div>
-
-
-      <div className="vera-emg-grid">
-
-        {/* LEFT COLUMN: Map + POIs */}
-        <div className="vera-emg-col-left">
-
-          {/* Interactive Map */}
-          <div className="vera-emg-card">
-            <div className="vera-emg-card-title">
-              <MapPin size={16} /> Live Incident Map
-              <span className="vera-poi-badge">{poiSource === 'overpass_live' ? '🟢 OSM Live' : poiSource === 'cached' ? '🟡 Cached' : '🔴 Offline'}</span>
-            </div>
-            <div className="vera-map-container">
-              <MapContainer
-                center={[complaint.latitude, complaint.longitude]}
-                zoom={14}
-                style={{ height: '100%', width: '100%' }}
-                zoomControl={true}
-              >
-                <MapController lat={complaint.latitude} lon={complaint.longitude} />
-                {/* OpenStreetMap tiles — free, no API key required */}
-                <TileLayer
-                  url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
-                  attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                  maxZoom={19}
-                />
-
-                {/* Incident Marker */}
-                <Marker position={[complaint.latitude, complaint.longitude]} icon={incidentIcon}>
-                  <Popup>
-                    <strong>🚨 Incident Location</strong><br />
-                    {complaint.category}<br />
-                    Risk: {complaint.risk_score}/100
-                  </Popup>
-                </Marker>
-
-                {/* GPS Accuracy Circle */}
-                {complaint.gps_accuracy && (
-                  <Circle
-                    center={[complaint.latitude, complaint.longitude]}
-                    radius={complaint.gps_accuracy}
-                    pathOptions={{ color: '#ef4444', fillColor: '#ef4444', fillOpacity: 0.08, dashArray: '4' }}
-                  />
-                )}
-
-                {/* Hospital Marker */}
-                {hospital && (
-                  <Marker position={[hospital.latitude, hospital.longitude]} icon={hospitalIcon}>
-                    <Popup>
-                      <strong>🏥 {hospital.name}</strong><br />
-                      {distKm(hospital.distance_meters)} km away<br />
-                      {hospital.phone && <><PhoneCall size={12} /> {hospital.phone}</>}<br />
-                      <a href={hospital.directionsUrl} target="_blank" rel="noopener noreferrer">Get Directions →</a>
-                    </Popup>
-                  </Marker>
-                )}
-
-                {/* Police Station Marker */}
-                {policeStation && (
-                  <Marker position={[policeStation.latitude, policeStation.longitude]} icon={policeIcon}>
-                    <Popup>
-                      <strong>👮 {policeStation.name}</strong><br />
-                      {distKm(policeStation.distance_meters)} km away<br />
-                      {policeStation.phone && <><PhoneCall size={12} /> {policeStation.phone}</>}<br />
-                      <a href={policeStation.directionsUrl} target="_blank" rel="noopener noreferrer">Get Directions →</a>
-                    </Popup>
-                  </Marker>
-                )}
-              </MapContainer>
-            </div>
-          </div>
-
-          {/* Nearby Responders */}
-          <div className="vera-emg-card">
-            <div className="vera-emg-card-title">
-              <Radio size={16} /> Nearest Emergency Services
-            </div>
-            {loadingPOI ? (
-              <div className="vera-poi-loading"><Loader2 size={16} className="vera-spin" /> Searching OSM for nearest services…</div>
-            ) : (
-              <div className="vera-poi-grid">
-                {/* Hospital */}
-                <div className={`vera-poi-card ${hospital ? 'vera-poi-found' : 'vera-poi-missing'}`}>
-                  <Hospital size={22} className="vera-poi-icon" />
-                  <div>
-                    <div className="vera-poi-label">Nearest Hospital</div>
-                    {hospital ? (
-                      <>
-                        <div className="vera-poi-name">{hospital.name}</div>
-                        <div className="vera-poi-dist">📏 {distKm(hospital.distance_meters)} km</div>
-                        {hospital.phone && <div className="vera-poi-phone">📞 {hospital.phone}</div>}
-                        <a href={hospital.directionsUrl} target="_blank" rel="noopener noreferrer" className="vera-poi-dir">
-                          <Navigation size={12} /> Get Directions
-                        </a>
-                      </>
-                    ) : (
-                      <div className="vera-poi-none">None found within 5 km</div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Police Station */}
-                <div className={`vera-poi-card ${policeStation ? 'vera-poi-found' : 'vera-poi-missing'}`}>
-                  <ShieldAlert size={22} className="vera-poi-icon" />
-                  <div>
-                    <div className="vera-poi-label">Nearest Police</div>
-                    {policeStation ? (
-                      <>
-                        <div className="vera-poi-name">{policeStation.name}</div>
-                        <div className="vera-poi-dist">📏 {distKm(policeStation.distance_meters)} km</div>
-                        {policeStation.phone && <div className="vera-poi-phone">📞 {policeStation.phone}</div>}
-                        <a href={policeStation.directionsUrl} target="_blank" rel="noopener noreferrer" className="vera-poi-dir">
-                          <Navigation size={12} /> Get Directions
-                        </a>
-                      </>
-                    ) : (
-                      <div className="vera-poi-none">None found within 5 km</div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* SMS Fallback */}
-          {smsPayload && (
-            <div className="vera-emg-card vera-sms-card">
-              <div className="vera-emg-card-title">
-                <AlertTriangle size={14} /> SMS FALLBACK SIMULATION
-              </div>
-              <div className="vera-sms-payload">{smsPayload}</div>
-              <div className="vera-sms-meta">
-                {smsPayload.length} chars · Max 160 · SIMULATION ONLY — not transmitted
-              </div>
-              <button onClick={copySMS} className="vera-sms-copy">
-                {smsCopied ? <><CheckCircle2 size={13} /> Copied!</> : <><Copy size={13} /> Copy SMS Payload</>}
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* RIGHT COLUMN: Voice Triage + Translation + Timeline */}
-        <div className="vera-emg-col-right">
-
-          {/* AI Triage Console */}
-          <div className="vera-emg-card vera-triage-card">
-            <div className="vera-emg-card-title">
-              <Radio size={16} /> Emergency Voice Triage
-              <span className={`vera-ai-badge ${aiSource === 'omniroute' ? 'vera-ai-live' : 'vera-ai-fallback'}`}>
-                {aiSource === 'omniroute' ? <><Wifi size={11} /> AI Live</> : <><WifiOff size={11} /> Deterministic</>}
-              </span>
-            </div>
-
-            {/* Chat History */}
-            <div className="vera-chat-log">
-              {/* Initial Complaint */}
-              <div className="vera-chat-bubble vera-chat-system">
-                <span className="vera-chat-label">📋 Incident Report</span>
-                <p><strong>{complaint.category}</strong> — {complaint.description}</p>
-              </div>
-
-              {conversationHistory.map((msg, i) => (
-                <div key={i} className={`vera-chat-bubble ${msg.role === 'assistant' ? 'vera-chat-vera' : 'vera-chat-user'}`}>
-                  <span className="vera-chat-label">{msg.role === 'assistant' ? '🤖 VERA' : '🗣️ Victim'}</span>
-                  <p>{msg.content}</p>
-                </div>
-              ))}
-
-              {/* Current Question */}
-              {triagePhase === 'loading' && (
-                <div className="vera-chat-bubble vera-chat-vera vera-chat-loading">
-                  <Loader2 size={14} className="vera-spin" /> VERA is processing…
-                </div>
-              )}
-              {triagePhase === 'active' && currentQuestion && (
-                <div className="vera-chat-bubble vera-chat-vera vera-chat-current">
-                  <span className="vera-chat-label">🤖 VERA</span>
-                  <p>{currentQuestion}</p>
-                  <ChevronRight size={14} className="vera-chat-arrow" />
-                </div>
-              )}
-
-              <div ref={chatEndRef} />
-            </div>
-
-            {/* Voice Input Area */}
-            {triagePhase !== 'complete' && (
-              <div className="vera-voice-area">
-                <textarea
-                  className="vera-voice-input"
-                  placeholder={isListening ? '🎙️ Listening… speak now' : 'Type or use microphone to respond…'}
-                  value={userVoiceInput}
-                  onChange={e => setUserVoiceInput(e.target.value)}
-                  rows={2}
-                />
-                <div className="vera-voice-controls">
-                  <button
-                    className={`vera-mic-btn ${isListening ? 'vera-mic-active' : ''}`}
-                    onClick={isListening ? stopListening : startListening}
-                    title={isListening ? 'Stop recording' : 'Start voice input'}
-                  >
-                    {isListening ? <MicOff size={18} /> : <Mic size={18} />}
-                  </button>
-                  <button
-                    className="vera-submit-btn"
-                    disabled={!userVoiceInput.trim() || triagePhase === 'loading'}
-                    onClick={submitResponse}
-                  >
-                    Submit Response <ChevronRight size={16} />
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {triagePhase === 'complete' && !summaryReady && (
-              <div className="vera-triage-complete">
-                <Loader2 size={16} className="vera-spin" /> Generating Responder Summary…
-              </div>
-            )}
-            {triagePhase === 'complete' && summaryReady && (
-              <div className="vera-triage-done">
-                <CheckCircle2 size={16} /> Triage Complete — Summary Ready
-              </div>
-            )}
-          </div>
-
-          {/* Translation Panel */}
-          <div className="vera-emg-card">
-            <div className="vera-emg-card-title">
-              <Languages size={16} /> Multilingual Translation
-              {translationService && (
-                <span className="vera-poi-badge">via {translationService}</span>
-              )}
-            </div>
-            <div className="vera-translate-controls">
-              <select
-                className="vera-lang-select"
-                value={sourceLang}
-                onChange={e => setSourceLang(e.target.value)}
-              >
-                <option value="auto">Auto-detect language</option>
-                <option value="hi">Hindi (हिन्दी)</option>
-                <option value="bn">Bengali (বাংলা)</option>
-                <option value="ta">Tamil (தமிழ்)</option>
-                <option value="te">Telugu (తెలుగు)</option>
-                <option value="mr">Marathi (मराठी)</option>
-                <option value="ur">Urdu (اردو)</option>
-                <option value="gu">Gujarati (ગુજરાતી)</option>
-                <option value="kn">Kannada (ಕನ್ನಡ)</option>
-                <option value="pa">Punjabi (ਪੰਜਾਬੀ)</option>
-                <option value="ar">Arabic (العربية)</option>
-                <option value="fr">French (Français)</option>
-                <option value="es">Spanish (Español)</option>
-                <option value="zh">Chinese (中文)</option>
-              </select>
-              <button
-                className="vera-translate-btn"
-                disabled={!userVoiceInput.trim() && !translatedText}
-                onClick={() => handleTranslate(userVoiceInput || complaint.description)}
-              >
-                {isTranslating ? <Loader2 size={14} className="vera-spin" /> : <Languages size={14} />}
-                {isTranslating ? 'Translating…' : 'Translate'}
-              </button>
-            </div>
-            <div className="vera-translate-panels">
-              <div className="vera-translate-box">
-                <div className="vera-translate-box-label">Original</div>
-                <div className="vera-translate-text vera-translate-original">
-                  {userVoiceInput || complaint.description}
-                </div>
-              </div>
-              <div className="vera-translate-box">
-                <div className="vera-translate-box-label">English (Responders)</div>
-                <div className="vera-translate-text vera-translate-result">
-                  {translatedText || <span className="vera-translate-placeholder">Translation will appear here…</span>}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Responder Summary */}
-          {summaryReady && (
-            <div className="vera-emg-card vera-summary-card">
-              <div className="vera-emg-card-title">
-                <CheckCircle2 size={16} /> Emergency Responder Summary
-                <span className="vera-summary-badge">READY</span>
-              </div>
-              <pre className="vera-summary-text">{responderSummary}</pre>
-              <button
-                className="vera-sms-copy"
-                onClick={() => navigator.clipboard.writeText(responderSummary)}
-              >
-                <Copy size={13} /> Copy Summary
-              </button>
-            </div>
-          )}
-
-          {generatingSummary && (
-            <div className="vera-emg-card">
-              <div className="vera-emg-card-title">
-                <Loader2 size={14} className="vera-spin" /> Generating Responder Summary…
-              </div>
-            </div>
-          )}
-
-          {/* Incident Timeline */}
-          <div className="vera-emg-card">
-            <div className="vera-emg-card-title">
-              <Clock size={16} /> Incident Timeline
-            </div>
-            <div className="vera-timeline">
-              {timeline.map((entry, i) => (
-                <div key={i} className="vera-timeline-entry">
-                  <span className="vera-timeline-icon">{entry.icon}</span>
-                  <div>
-                    <div className="vera-timeline-event">{entry.event}</div>
-                    <div className="vera-timeline-time">{entry.time}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-        </div>
-      </div>
     </div>
   );
 };

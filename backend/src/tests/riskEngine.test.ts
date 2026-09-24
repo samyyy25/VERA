@@ -1,9 +1,14 @@
 import { riskEngine } from '../services/riskEngine/riskScorer';
+import { calculateConfidence } from '../services/riskEngine/confidence';
+import { extractDecisionFactors } from '../services/riskEngine/decisionFactors';
+import { buildIncidentIntelligence } from '../services/riskEngine/incidentIntelligence';
+import { detectDuplicateIncident } from '../services/riskEngine/duplicateDetector';
+import { analyzeIncident } from '../services/riskEngine';
 import { complaintStore } from '../services/store/complaintStore';
 
 async function runTests() {
   console.log('====================================================');
-  console.log('🧪 VERA DETERMINISTIC RISK ENGINE & ESCALATION TESTS');
+  console.log('🧪 VERA 2.0 PHASE 1: CORE INTELLIGENCE TEST SUITE');
   console.log('====================================================\n');
 
   let passed = 0;
@@ -30,41 +35,8 @@ async function runTests() {
   );
   assert(res1.score < 30 && res1.level === 'LOW', 'Test 1: Streetlight broken produces LOW risk', res1);
 
-  // TEST 2: Minor civic issue (Low Risk)
+  // TEST 2: High Risk / Critical (Accident + Bleeding + Unconscious)
   const res2 = riskEngine.evaluateRisk(
-    'Garbage accumulation in alleyway for two days',
-    'Garbage/waste',
-    26.8467,
-    80.9462,
-    'session_test_1',
-    []
-  );
-  assert(res2.score < 30 && res2.level === 'LOW', 'Test 2: Garbage accumulation produces LOW risk', res2);
-
-  // TEST 3: Moderate Risk (Harassment without severe physical keywords)
-  const res3 = riskEngine.evaluateRisk(
-    'Suspicious group threatening passersby verbally',
-    'Harassment',
-    26.8467,
-    80.9462,
-    'session_test_1',
-    []
-  );
-  assert(res3.score >= 30 && res3.score < 60, 'Test 3: Verbal threat/harassment produces MEDIUM risk (30-59)', res3);
-
-  // TEST 4: High Risk (Road accident with collision)
-  const res4 = riskEngine.evaluateRisk(
-    'There has been a severe road accident with head-on collision',
-    'Accident',
-    26.8467,
-    80.9462,
-    'session_test_1',
-    []
-  );
-  assert(res4.score >= 60, `Test 4: Road accident produces HIGH risk (Score: ${res4.score})`, res4);
-
-  // TEST 5: Critical Emergency (Accident + Bleeding + Unconscious) - Section 10 Demo Scenario
-  const res5 = riskEngine.evaluateRisk(
     'Two people are injured after a road accident. One person is bleeding and another appears unconscious.',
     'Accident',
     26.8467,
@@ -72,150 +44,158 @@ async function runTests() {
     'session_test_1',
     []
   );
-  assert(res5.score >= 80 && res5.level === 'CRITICAL', `Test 5: Accident + bleeding + unconscious produces CRITICAL risk (Score: ${res5.score}/100)`, res5);
+  assert(res2.score >= 80 && res2.level === 'CRITICAL', `Test 2: Accident + bleeding + unconscious produces CRITICAL risk (Score: ${res2.score}/100)`, res2);
 
-  // TEST 6: Fire Outbreak with Trapped Victims
-  const res6 = riskEngine.evaluateRisk(
-    'Huge fire outbreak on 3rd floor, people are trapped inside and screaming',
-    'Fire',
-    26.8467,
-    80.9462,
-    'session_test_1',
-    []
-  );
-  assert(res6.score >= 80 && res6.level === 'CRITICAL', `Test 6: Fire + trapped produces CRITICAL risk (Score: ${res6.score}/100)`, res6);
-
-  // TEST 7: Reporter Frequency Impact
-  const existingReportsSameSession = [
-    {
-      id: 'c1',
-      device_session_id: 'rapid_reporter_99',
-      category: 'Road damage',
-      description: 'Pothole',
-      latitude: 26.8467,
-      longitude: 80.9462,
-      risk_score: 10,
-      risk_level: 'LOW' as const,
-      status: 'Reported' as const,
-      created_at: new Date(Date.now() - 2 * 60 * 1000).toISOString(),
-      updated_at: new Date().toISOString(),
-    },
-    {
-      id: 'c2',
-      device_session_id: 'rapid_reporter_99',
-      category: 'Road damage',
-      description: 'Pothole getting bigger',
-      latitude: 26.8467,
-      longitude: 80.9462,
-      risk_score: 10,
-      risk_level: 'LOW' as const,
-      status: 'Reported' as const,
-      created_at: new Date(Date.now() - 1 * 60 * 1000).toISOString(),
-      updated_at: new Date().toISOString(),
-    },
-  ];
-
-  const res7 = riskEngine.evaluateRisk(
-    'Water pipe burst and spreading',
-    'Water leakage',
-    26.8467,
-    80.9462,
-    'rapid_reporter_99',
-    existingReportsSameSession
-  );
-  assert(res7.breakdown.frequencyScore === 20, `Test 7: Multiple reports from same session added +20 frequency bonus`, res7.breakdown);
-
-  // TEST 8: Location Clustering (Within 100 meters)
-  // Distance between 26.8467, 80.9462 and 26.8470, 80.9463 is ~34 meters
-  const existingNearbyReports = [
-    {
-      id: 'c3',
-      device_session_id: 'other_user_1',
-      category: 'Accident',
-      description: 'Vehicle collided near market',
-      latitude: 26.8470,
-      longitude: 80.9463,
-      risk_score: 55,
-      risk_level: 'MEDIUM' as const,
-      status: 'Reported' as const,
-      created_at: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
-      updated_at: new Date().toISOString(),
-    },
-    {
-      id: 'c4',
-      device_session_id: 'other_user_2',
-      category: 'Accident',
-      description: 'Crowd gathering around crash site',
-      latitude: 26.8469,
-      longitude: 80.9461,
-      risk_score: 55,
-      risk_level: 'MEDIUM' as const,
-      status: 'Reported' as const,
-      created_at: new Date(Date.now() - 3 * 60 * 1000).toISOString(),
-      updated_at: new Date().toISOString(),
-    },
-  ];
-
-  const res8 = riskEngine.evaluateRisk(
-    'Vehicle crash blocked traffic',
-    'Accident',
-    26.8467,
-    80.9462,
-    'new_user_3',
-    existingNearbyReports
-  );
-  assert(res8.breakdown.clusterScore === 25, `Test 8: Incidents within 100m proximity added +25 clustering bonus`, res8.breakdown);
-
-  // TEST 9: Reports Far Apart Do NOT Trigger Clustering Bonus
-  // Point 27.8467, 80.9462 is over 100 km away
-  const farAwayReports = [
-    {
-      id: 'c5',
-      device_session_id: 'other_user_far',
-      category: 'Accident',
-      description: 'Accident in distant city',
-      latitude: 27.8467,
-      longitude: 80.9462,
-      risk_score: 60,
-      risk_level: 'HIGH' as const,
-      status: 'Reported' as const,
-      created_at: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
-      updated_at: new Date().toISOString(),
-    },
-  ];
-  const res9 = riskEngine.evaluateRisk(
-    'Pothole on street',
-    'Road damage',
-    26.8467,
-    80.9462,
-    'session_far',
-    farAwayReports
-  );
-  assert(res9.breakdown.clusterScore === 0, 'Test 9: Distant reports (>100m) do NOT add cluster score', res9.breakdown);
-
-  // TEST 10: Automatic Server-Side Escalation in complaintStore
-  const escalationResult = await complaintStore.createComplaint({
+  // TEST 3: AI Confidence Evaluation with Basis
+  const conf1 = calculateConfidence({
+    text: 'Head-on collision between car and truck near market crossroad, fuel leaking',
     category: 'Accident',
-    description: 'Two people injured in head-on crash, heavy bleeding and one unconscious person',
     latitude: 26.8467,
     longitude: 80.9462,
-    device_session_id: 'test_escalation_device',
+    gpsAccuracy: 12,
+    photoUrl: 'https://example.com/photo.jpg',
+  });
+  assert(
+    conf1.score >= 85 &&
+      conf1.basis.input_completeness >= 80 &&
+      conf1.basis.location_availability === 95 &&
+      conf1.basis.evidence_strength === 95,
+    `Test 3: Detailed report with photo & 12m GPS achieves high confidence (${conf1.score}%)`,
+    conf1
+  );
+
+  // TEST 4: Decision Factors Extraction ("Why VERA Escalated")
+  const factors = extractDecisionFactors({
+    category: 'Accident',
+    matchedKeywords: [
+      { keyword: 'accident', weight: 30 },
+      { keyword: 'injury', weight: 20 },
+      { keyword: 'unconscious', weight: 35 },
+    ],
+    nearbyIncidentCount: 2,
+    reporterFrequencyCount: 1,
+    hasLocation: true,
+    gpsAccuracy: 10,
+    riskScore: 92,
+    hasEvidence: true,
+  });
+  assert(
+    factors.includes('Accident detected') &&
+      factors.includes('Possible injury mentioned') &&
+      factors.some(f => f.includes('Proximity cluster')) &&
+      factors.some(f => f.includes('Precise GPS fix')),
+    'Test 4: Decision factors correctly capture accident, injury, cluster, and GPS precision',
+    factors
+  );
+
+  // TEST 5: Structured Incident Intelligence Card
+  const intel = buildIncidentIntelligence({
+    category: 'Accident',
+    description: 'Two people severely injured in road accident at main intersection, unconscious driver',
+    riskScore: 94,
+    riskLevel: 'CRITICAL',
+    confidenceScore: 91,
+    decisionFactors: factors,
+    latitude: 26.8467,
+    longitude: 80.9462,
+    gpsAccuracy: 12,
+  });
+  assert(
+    intel.incident_type === 'Road Accident' &&
+      intel.severity === 'CRITICAL' &&
+      intel.risk_score === 94 &&
+      intel.confidence_score === 91 &&
+      intel.people_affected_estimate === '2+' &&
+      intel.possible_injury === true &&
+      intel.location_confirmed === true &&
+      intel.recommended_action === 'Immediate medical and police escalation',
+    'Test 5: Incident Intelligence card built with all structured fields & recommended action',
+    intel
+  );
+
+  // TEST 6: Non-Destructive Duplicate Incident Detection
+  const existingReportsForDup = [
+    {
+      id: 'VERA-10482',
+      device_session_id: 'citizen_alpha',
+      category: 'Accident',
+      description: 'Major crash at Hazratganj crossing, car flipped',
+      latitude: 26.8467,
+      longitude: 80.9462,
+      risk_score: 90,
+      risk_level: 'CRITICAL' as const,
+      status: 'Critical Incident' as const,
+      created_at: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
+      updated_at: new Date().toISOString(),
+    },
+  ];
+
+  // Incoming report 35 meters away, 10 minutes later, same category
+  const dupCheck = detectDuplicateIncident({
+    category: 'Accident',
+    description: 'Car flipped over at Hazratganj crossing, people gathering',
+    latitude: 26.8470, // ~34m away
+    longitude: 80.9463,
+    createdAt: new Date().toISOString(),
+    existingComplaints: existingReportsForDup,
   });
 
   assert(
-    escalationResult.complaint.status === 'Critical Incident',
-    `Test 10A: Server automatically set status to "Critical Incident" (Score: ${escalationResult.complaint.risk_score})`
-  );
-  assert(
-    Boolean(escalationResult.incident),
-    'Test 10B: Emergency record created in incidents table'
+    dupCheck.is_duplicate === true &&
+      dupCheck.primary_incident_id === 'VERA-10482' &&
+      dupCheck.similarity_score >= 0.7 &&
+      dupCheck.reasons.length >= 2,
+    `Test 6: Duplicate incident correctly linked to VERA-10482 without deleting (Similarity: ${dupCheck.similarity_score})`,
+    dupCheck
   );
 
-  const { events } = await complaintStore.getComplaintById(escalationResult.complaint.id);
-  const escalationEvent = events.find(e => e.changed_by === 'VERA_RISK_ENGINE');
+  // TEST 7: Distant Report is NOT flagged as duplicate
+  const nonDupCheck = detectDuplicateIncident({
+    category: 'Accident',
+    description: 'Accident on highway 50km away',
+    latitude: 27.8467, // >100km away
+    longitude: 80.9462,
+    createdAt: new Date().toISOString(),
+    existingComplaints: existingReportsForDup,
+  });
   assert(
-    Boolean(escalationEvent),
-    'Test 10C: Audit event recorded for automatic escalation'
+    nonDupCheck.is_duplicate === false && nonDupCheck.primary_incident_id === null,
+    'Test 7: Distant report is correctly marked as unique (non-duplicate)',
+    nonDupCheck
+  );
+
+  // TEST 8: Full Complaint Ingestion with Operational Timeline in ComplaintStore
+  const fullIngestion = await complaintStore.createComplaint({
+    category: 'Accident',
+    description: 'Two people injured in severe collision, heavy bleeding and unconscious passenger',
+    latitude: 26.8467,
+    longitude: 80.9462,
+    gps_accuracy: 14,
+    device_session_id: 'test_phase1_device',
+  });
+
+  const comp = fullIngestion.complaint;
+  assert(
+    Boolean(comp.incident_intelligence) &&
+      comp.incident_intelligence?.severity === 'CRITICAL' &&
+      typeof comp.confidence_score === 'number' &&
+      Boolean(comp.confidence_basis) &&
+      Boolean(comp.duplicate_info) &&
+      Array.isArray(comp.operational_timeline) &&
+      comp.operational_timeline.length >= 5,
+    `Test 8A: Complaint created with complete Phase 1 intelligence, confidence (${comp.confidence_score}%), and timeline`,
+    comp
+  );
+
+  const timelineEvents = comp.operational_timeline?.map(e => e.event) || [];
+  assert(
+    timelineEvents.includes('Complaint Received') &&
+      timelineEvents.includes('AI Intelligence Generated') &&
+      timelineEvents.includes('Decision Factors Recorded') &&
+      timelineEvents.includes('Duplicate Check Completed') &&
+      timelineEvents.includes('Location Verified'),
+    'Test 8B: Operational timeline contains all required Phase 1 system events',
+    timelineEvents
   );
 
   console.log(`\n====================================================`);

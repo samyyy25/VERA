@@ -1,3 +1,5 @@
+import { ResponsePlan } from './complaint';
+
 export interface Incident {
   id: string;
   complaint_id: string;
@@ -9,6 +11,7 @@ export interface Incident {
   summary?: string | null;
   translated_summary?: string | null;
   video_room_url?: string | null;
+  response_plan?: ResponsePlan | null;
   created_at: string;
   escalated_at: string;
   resolved_at?: string | null;

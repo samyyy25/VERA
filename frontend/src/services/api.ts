@@ -8,7 +8,7 @@ export const apiClient = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 10000,
+  timeout: 60000,
 });
 
 export interface HealthResponse {
@@ -31,7 +31,9 @@ export const checkHealth = async (): Promise<HealthResponse> => {
 };
 
 export const submitComplaint = async (data: CreateComplaintInput): Promise<{ success: boolean; complaint: Complaint }> => {
-  const response = await apiClient.post<{ success: boolean; complaint: Complaint }>('/complaints', data);
+  const response = await apiClient.post<{ success: boolean; complaint: Complaint }>('/complaints', data, {
+    timeout: 60000,
+  });
   return response.data;
 };
 
@@ -154,7 +156,7 @@ export const translateText = async (
 export interface ResponderLocation {
   id: string;
   name: string;
-  type: 'hospital' | 'police' | 'fire_station' | 'other';
+  type: 'hospital' | 'police' | 'fire_station' | 'municipal' | 'other';
   distance_meters: number;
   latitude: number;
   longitude: number;
@@ -212,3 +214,91 @@ export const fetchRecentEvents = async (
   const response = await apiClient.get('/complaints/events', { params: { limit } });
   return response.data;
 };
+
+// ─── Phase 2: Response Plan Orchestration ─────────────────────────────────────
+
+export const fetchResponsePlan = async (
+  id: string
+): Promise<{ success: boolean; plan: import('../types').ResponsePlan }> => {
+  const response = await apiClient.get(`/incidents/${id}/response-plan`);
+  return response.data;
+};
+
+export const confirmResponsePlan = async (
+  id: string,
+  confirmedBy = 'AUTHORIZED_OPERATOR',
+  notes?: string
+): Promise<{
+  success: boolean;
+  message: string;
+  complaint: Complaint;
+  plan: import('../types').ResponsePlan;
+}> => {
+  const response = await apiClient.post(`/incidents/${id}/confirm-response`, {
+    confirmed_by: confirmedBy,
+    notes,
+  });
+  return response.data;
+};
+
+export const modifyResponsePlan = async (
+  id: string,
+  action: 'DOWNGRADE' | 'MODIFY',
+  details?: any,
+  changedBy = 'AUTHORIZED_OPERATOR'
+): Promise<{
+  success: boolean;
+  message: string;
+  complaint: Complaint;
+}> => {
+  const response = await apiClient.post(`/incidents/${id}/modify-response`, {
+    action,
+    details,
+    changed_by: changedBy,
+  });
+  return response.data;
+};
+
+// ─── Phase 3: Live Incident Updates ──────────────────────────────────────────
+
+export const fetchIncidentUpdates = async (
+  id: string
+): Promise<{ success: boolean; count: number; updates: import('../types').IncidentUpdate[] }> => {
+  const response = await apiClient.get(`/incidents/${id}/updates`);
+  return response.data;
+};
+
+export const postIncidentUpdate = async (
+  id: string,
+  payload: {
+    author_type: import('../types').UpdateAuthorType;
+    author_name: string;
+    author_role?: string;
+    message: string;
+    update_type?: import('../types').UpdateCategory;
+    photo_url?: string | null;
+    is_pinned?: boolean;
+    is_verified_authority?: boolean;
+  }
+): Promise<{
+  success: boolean;
+  message: string;
+  update: import('../types').IncidentUpdate;
+}> => {
+  const response = await apiClient.post(`/incidents/${id}/updates`, payload);
+  return response.data;
+};
+
+export const togglePinUpdate = async (
+  id: string,
+  updateId: string
+): Promise<{
+  success: boolean;
+  message: string;
+  update: import('../types').IncidentUpdate;
+}> => {
+  const response = await apiClient.patch(`/incidents/${id}/updates/${updateId}/pin`);
+  return response.data;
+};
+
+

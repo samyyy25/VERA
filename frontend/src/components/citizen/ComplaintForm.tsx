@@ -28,6 +28,7 @@ import { useSpeechRecognition } from '../../hooks/useSpeechRecognition';
 import { submitComplaint } from '../../services/api';
 import { Complaint } from '../../types';
 import { shareIncident } from '../../utils/shareCardGenerator';
+import { compressImage } from '../../utils/imageCompressor';
 
 interface ComplaintFormProps {
   onSuccess?: (complaint: Complaint) => void;
@@ -54,6 +55,7 @@ export const ComplaintForm: React.FC<ComplaintFormProps> = ({ onSuccess, onNavig
   
   // Media uploads
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [photoCompressing, setPhotoCompressing] = useState<boolean>(false);
   const [videoPreview, setVideoPreview] = useState<string | null>(null);
   const [videoFileName, setVideoFileName] = useState<string | null>(null);
   const [videoUploadProgress, setVideoUploadProgress] = useState<number | null>(null);
@@ -74,6 +76,28 @@ export const ComplaintForm: React.FC<ComplaintFormProps> = ({ onSuccess, onNavig
 
   // Selected category department mapping
   const selectedCatObj = CATEGORIES.find(c => c.id === category) || CATEGORIES[0];
+
+  // Citizen Portal Mode: Civic vs Emergency
+  const [portalMode, setPortalMode] = useState<'civic' | 'emergency'>('civic');
+  const [autoSwitched, setAutoSwitched] = useState<boolean>(false);
+
+  // Auto-detect emergency danger keywords in Civic mode
+  useEffect(() => {
+    if (portalMode === 'civic') {
+      const urgentWords = /\b(accident|crash|collision|bleed\w*|blood|unconscious|passed out|explosion|blast|fire|trapped|victim|dying|stab\w*|gunshot|heart attack|casualt\w*)\b/i;
+      if (urgentWords.test(description)) {
+        setPortalMode('emergency');
+        setAutoSwitched(true);
+        if (/\b(fire|flame|blaz\w*)\b/i.test(description)) {
+          setCategory('Fire');
+        } else if (/\b(unconscious|heart|chest pain|stroke|ambulance)\b/i.test(description)) {
+          setCategory('Medical Emergency');
+        } else {
+          setCategory('Accident');
+        }
+      }
+    }
+  }, [description, portalMode]);
 
   // Persist or retrieve anonymous device session ID
   const [sessionId, setSessionId] = useState<string>('');
@@ -98,23 +122,32 @@ export const ComplaintForm: React.FC<ComplaintFormProps> = ({ onSuccess, onNavig
     }
   }, [transcript]);
 
-  // Handle Photo Upload
-  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Handle Photo Upload with client-side optimization
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setMediaError(null);
 
-    // Size limit for photos: 15MB
-    if (file.size > 15 * 1024 * 1024) {
-      setMediaError('Photo exceeds 15MB limit. Please upload a smaller image.');
+    // Size limit for original photos: 25MB
+    if (file.size > 25 * 1024 * 1024) {
+      setMediaError('Photo exceeds 25MB limit. Please upload a smaller image.');
       return;
     }
 
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      setPhotoPreview(reader.result as string);
-    };
-    reader.readAsDataURL(file);
+    try {
+      setPhotoCompressing(true);
+      const compressed = await compressImage(file);
+      setPhotoPreview(compressed);
+    } catch (err) {
+      console.warn('Image compression fallback to standard reader:', err);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setPhotoPreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    } finally {
+      setPhotoCompressing(false);
+    }
   };
 
   // Handle Video Upload (mp4, mov, webm up to 50MB) - Section 39
@@ -268,73 +301,73 @@ export const ComplaintForm: React.FC<ComplaintFormProps> = ({ onSuccess, onNavig
 
   if (submissionSuccess) {
     return (
-      <div className="glass-panel-glow rounded-2xl p-6 sm:p-8 border border-teal-500/40 flex flex-col items-center text-center animate-fadeIn">
-        <div className="w-16 h-16 rounded-full bg-teal-500/20 text-teal-400 flex items-center justify-center mb-4 border border-teal-500/30">
+      <div className="vera-card-elevated rounded-2xl p-6 sm:p-8 border border-[var(--vera-border-strong)] flex flex-col items-center text-center animate-fadeIn">
+        <div className="w-16 h-16 rounded-full bg-[#800020]/15 text-[#800020] dark:text-[#D45060] flex items-center justify-center mb-4 border border-[#800020]/30">
           <CheckCircle2 className="w-8 h-8" />
         </div>
-        <h3 className="text-xl font-bold text-white mb-1">Complaint Logged Successfully</h3>
-        <p className="text-slate-300 text-sm max-w-md mb-5">
+        <h3 className="text-xl font-bold text-[var(--vera-text-primary)] mb-1">Complaint Logged Successfully</h3>
+        <p className="text-[var(--vera-text-secondary)] text-sm max-w-md mb-5">
           Your report has been received and automatically dispatched via VERA.
         </p>
 
         {/* Complaint Summary Card */}
-        <div className="w-full max-w-lg bg-slate-900/90 rounded-xl p-4 border border-slate-800 text-left mb-5 space-y-2.5">
-          <div className="flex justify-between items-center text-xs pb-2 border-b border-slate-800">
-            <span className="text-slate-400">Incident ID:</span>
-            <span className="font-mono text-teal-400 font-semibold">{submissionSuccess.id.substring(0, 13)}...</span>
+        <div className="w-full max-w-lg vera-card rounded-xl p-4 border border-[var(--vera-border)] text-left mb-5 space-y-2.5">
+          <div className="flex justify-between items-center text-xs pb-2 border-b border-[var(--vera-border)]">
+            <span className="text-[var(--vera-text-muted)]">Incident ID:</span>
+            <span className="font-mono text-[#800020] dark:text-[#D45060] font-semibold">{submissionSuccess.id.substring(0, 13)}...</span>
           </div>
 
           <div className="flex justify-between items-center text-xs">
-            <span className="text-slate-400">Category:</span>
-            <span className="font-medium text-slate-200">{submissionSuccess.category}</span>
+            <span className="text-[var(--vera-text-muted)]">Category:</span>
+            <span className="font-medium text-[var(--vera-text-primary)]">{submissionSuccess.category}</span>
           </div>
 
           <div className="flex justify-between items-center text-xs">
-            <span className="text-slate-400">Authority Routing:</span>
-            <span className="font-semibold text-teal-300 flex items-center gap-1">
+            <span className="text-[var(--vera-text-muted)]">Authority Routing:</span>
+            <span className="font-semibold text-[#800020] dark:text-[#D45060] flex items-center gap-1">
               <Building2 className="w-3 h-3" />
               {submissionSuccess.routed_department || selectedCatObj.dept}
             </span>
           </div>
 
           <div className="flex justify-between items-center text-xs">
-            <span className="text-slate-400">Status:</span>
-            <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+            <span className="text-[var(--vera-text-muted)]">Status:</span>
+            <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
               {submissionSuccess.status}
             </span>
           </div>
 
           <div className="flex justify-between items-center text-xs">
-            <span className="text-slate-400">Risk Assessment:</span>
-            <span className={`font-semibold ${submissionSuccess.risk_score >= 60 ? 'text-red-400 font-bold' : 'text-slate-200'}`}>
+            <span className="text-[var(--vera-text-muted)]">Risk Assessment:</span>
+            <span className={`font-semibold ${submissionSuccess.risk_score >= 60 ? 'text-[#D45060] font-bold' : 'text-[var(--vera-text-primary)]'}`}>
               {submissionSuccess.risk_score} / 100 ({submissionSuccess.risk_level})
             </span>
           </div>
 
           {submissionSuccess.address && (
-            <div className="text-xs pt-2 border-t border-slate-800 text-slate-300 flex items-start gap-1.5">
-              <MapPin className="w-3.5 h-3.5 text-teal-400 shrink-0 mt-0.5" />
+            <div className="text-xs pt-2 border-t border-[var(--vera-border)] text-[var(--vera-text-secondary)] flex items-start gap-1.5">
+              <MapPin className="w-3.5 h-3.5 text-[#D45060] shrink-0 mt-0.5" />
               <span className="line-clamp-2">{submissionSuccess.address}</span>
             </div>
           )}
 
           {/* Attached Media Previews on Confirmation */}
           {(submissionSuccess.photo_url || submissionSuccess.video_url) && (
-            <div className="pt-2 border-t border-slate-800 space-y-2">
-              <span className="text-[11px] text-slate-400 block font-semibold uppercase">Attached Media</span>
+            <div className="pt-2 border-t border-[var(--vera-border)] space-y-2">
+              <span className="text-[11px] text-[var(--vera-text-muted)] block font-semibold uppercase">Attached Media</span>
               <div className="flex flex-wrap gap-2">
                 {submissionSuccess.photo_url && (
                   <img
                     src={submissionSuccess.photo_url}
                     alt="Uploaded incident photo"
-                    className="w-24 h-20 rounded-lg object-cover border border-slate-700"
+                    className="w-24 h-20 rounded-lg object-cover border border-[var(--vera-border)]"
                   />
                 )}
                 {submissionSuccess.video_url && (
                   <video
                     src={submissionSuccess.video_url}
                     controls
-                    className="w-48 h-28 rounded-lg object-cover border border-slate-700 bg-black"
+                    className="w-48 h-28 rounded-lg object-cover border border-[var(--vera-border)] bg-black"
                   />
                 )}
               </div>
@@ -342,18 +375,18 @@ export const ComplaintForm: React.FC<ComplaintFormProps> = ({ onSuccess, onNavig
           )}
         </div>
 
-        {/* Share Button & Notice (Section 42) */}
+        {/* Share Button & Notice */}
         <div className="w-full max-w-lg mb-5 flex flex-col gap-2">
           <button
             type="button"
             onClick={handleShare}
-            className="w-full py-2.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-100 font-semibold text-xs border border-slate-700 flex items-center justify-center gap-2 transition"
+            className="w-full py-2.5 px-4 rounded-xl vera-button-secondary font-semibold text-xs flex items-center justify-center gap-2 transition"
           >
-            <Share2 className="w-4 h-4 text-teal-400" />
+            <Share2 className="w-4 h-4 text-[#D45060]" />
             <span>Share Incident (One-Tap Web Share)</span>
           </button>
           {shareFeedback && (
-            <span className="text-xs text-teal-400 font-medium">{shareFeedback}</span>
+            <span className="text-xs text-[#800020] dark:text-[#D45060] font-medium">{shareFeedback}</span>
           )}
         </div>
 
@@ -362,14 +395,14 @@ export const ComplaintForm: React.FC<ComplaintFormProps> = ({ onSuccess, onNavig
             <button
               type="button"
               onClick={onNavigateToDashboard}
-              className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold text-sm transition shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2"
+              className="w-full sm:w-auto px-6 py-2.5 rounded-xl vera-button-primary font-bold text-sm transition flex items-center justify-center gap-2"
             >
               <span>View in Command Center</span>
             </button>
           )}
           <button
             onClick={handleResetForm}
-            className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-slate-950 font-semibold text-sm transition shadow-lg shadow-teal-500/20"
+            className="w-full sm:w-auto px-6 py-2.5 rounded-xl vera-button-secondary font-semibold text-sm transition"
           >
             Submit Another Report
           </button>
@@ -379,34 +412,92 @@ export const ComplaintForm: React.FC<ComplaintFormProps> = ({ onSuccess, onNavig
   }
 
   return (
-    <form onSubmit={handleSubmit} className="glass-panel rounded-2xl p-5 sm:p-7 border border-slate-800 space-y-6">
+    <form onSubmit={handleSubmit} className="vera-card rounded-2xl p-5 sm:p-7 border border-[var(--vera-border)] space-y-6">
+      {/* Citizen Portal Mode Selector */}
+      <div className="bg-[var(--vera-surface-muted)] border border-[var(--vera-border)] rounded-xl p-1.5 flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => {
+            setPortalMode('civic');
+            setAutoSwitched(false);
+            if (CATEGORIES.find(c => c.id === category)?.emergency) {
+              setCategory('Road damage');
+            }
+          }}
+          className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold uppercase tracking-wider transition flex items-center justify-center gap-2 cursor-pointer ${
+            portalMode === 'civic'
+              ? 'bg-[#800020] text-[#FFF9F2] shadow-md'
+              : 'text-[var(--vera-text-muted)] hover:text-[var(--vera-text-primary)]'
+          }`}
+        >
+          <Building2 className="w-4 h-4" />
+          Report Civic Issue
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setPortalMode('emergency');
+            if (!CATEGORIES.find(c => c.id === category)?.emergency) {
+              setCategory('Accident');
+            }
+          }}
+          className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold uppercase tracking-wider transition flex items-center justify-center gap-2 cursor-pointer ${
+            portalMode === 'emergency'
+              ? 'bg-[#D45060] text-white shadow-md'
+              : 'text-[var(--vera-text-muted)] hover:text-[var(--vera-text-primary)]'
+          }`}
+        >
+          <ShieldAlert className="w-4 h-4" />
+          Emergency Priority
+        </button>
+      </div>
+
+      {/* Auto-Switched Emergency Banner */}
+      {autoSwitched && portalMode === 'emergency' && (
+        <div className="p-3 bg-red-950/40 border border-red-500/50 rounded-xl text-xs text-red-300 dark:text-red-200 flex items-center justify-between gap-2 animate-fade-in">
+          <div className="flex items-center gap-2 font-medium">
+            <ShieldAlert className="w-4 h-4 text-[#D45060] shrink-0 animate-pulse" />
+            <span>Acute danger language detected &mdash; Automatically switched to Priority Emergency Mode.</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setAutoSwitched(false)}
+            className="text-[#D45060] hover:underline text-[10px] uppercase font-bold cursor-pointer"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
       <div>
         <div className="flex items-center justify-between mb-1">
-          <h3 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
-            <Radio className="w-5 h-5 text-teal-400" />
-            Report Issue or Emergency
+          <h3 className="text-base sm:text-lg font-bold text-[var(--vera-text-primary)] flex items-center gap-2">
+            <Radio className={`w-5 h-5 ${portalMode === 'emergency' ? 'text-[#D45060] animate-pulse' : 'text-[#800020] dark:text-[#D45060]'}`} />
+            {portalMode === 'emergency' ? 'Emergency Incident Response' : 'Report Civic Issue'}
           </h3>
-          <span className="text-[11px] font-mono text-slate-400">Citizen Portal</span>
+          <span className="text-[11px] font-mono text-[var(--vera-text-muted)]">Citizen Portal</span>
         </div>
-        <p className="text-xs text-slate-400">
-          Select category and describe the situation. Emergency incidents will be automatically analyzed by the backend risk engine and routed to responsible authorities.
+        <p className="text-xs text-[var(--vera-text-secondary)]">
+          {portalMode === 'emergency'
+            ? 'Emergency reports are prioritized with live AI risk scoring, hospital/police dispatch recommendations, and instant escalation.'
+            : 'Select issue category and submit details. Reports are automatically routed to the responsible municipal department with trackable SLA.'}
         </p>
       </div>
 
       {/* 1. Category Selection */}
       <div className="space-y-2">
         <div className="flex items-center justify-between">
-          <label className="text-xs font-semibold uppercase tracking-wider text-slate-300">
+          <label className="text-xs font-semibold uppercase tracking-wider text-[var(--vera-text-secondary)]">
             1. Issue Category
           </label>
-          <span className="text-[11px] text-teal-300 font-medium flex items-center gap-1">
+          <span className="text-[11px] text-[#800020] dark:text-[#D45060] font-medium flex items-center gap-1">
             <Building2 className="w-3 h-3" />
             Routed to: {selectedCatObj.dept}
           </span>
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-          {CATEGORIES.map(cat => {
+          {CATEGORIES.filter(cat => (portalMode === 'emergency' ? cat.emergency : true)).map(cat => {
             const Icon = cat.icon;
             const isSelected = category === cat.id;
             return (
@@ -414,15 +505,15 @@ export const ComplaintForm: React.FC<ComplaintFormProps> = ({ onSuccess, onNavig
                 key={cat.id}
                 type="button"
                 onClick={() => setCategory(cat.id)}
-                className={`flex items-center gap-2 p-2.5 rounded-xl text-left text-xs transition border ${
+                className={`flex items-center gap-2 p-2.5 rounded-xl text-left text-xs transition border cursor-pointer ${
                   isSelected
                     ? cat.emergency
-                      ? 'bg-red-500/20 text-red-300 border-red-500/50 shadow-sm shadow-red-500/20'
-                      : 'bg-teal-500/20 text-teal-300 border-teal-500/50 shadow-sm shadow-teal-500/20'
-                    : 'bg-slate-900/80 text-slate-400 border-slate-800 hover:text-slate-200 hover:bg-slate-800/60'
+                      ? 'bg-[#D45060] text-white border-[#D45060] shadow-sm font-bold'
+                      : 'bg-[#800020] text-[#FFF9F2] border-[#800020] shadow-sm font-bold'
+                    : 'bg-[var(--vera-surface)] text-[var(--vera-text-secondary)] border-[var(--vera-border)] hover:text-[var(--vera-text-primary)] hover:bg-[var(--vera-surface-muted)]'
                 }`}
               >
-                <Icon className={`w-4 h-4 shrink-0 ${isSelected ? (cat.emergency ? 'text-red-400' : 'text-teal-400') : 'text-slate-500'}`} />
+                <Icon className={`w-4 h-4 shrink-0 ${isSelected ? 'text-white' : 'text-[var(--vera-text-muted)]'}`} />
                 <span className="truncate font-medium">{cat.label}</span>
               </button>
             );
@@ -433,17 +524,17 @@ export const ComplaintForm: React.FC<ComplaintFormProps> = ({ onSuccess, onNavig
       {/* 2. Description & Voice Input */}
       <div className="space-y-2">
         <div className="flex items-center justify-between">
-          <label className="text-xs font-semibold uppercase tracking-wider text-slate-300">
+          <label className="text-xs font-semibold uppercase tracking-wider text-[var(--vera-text-secondary)]">
             2. Incident Description
           </label>
           {speechSupported && (
             <button
               type="button"
               onClick={isListening ? stopListening : startListening}
-              className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium transition ${
+              className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium transition cursor-pointer ${
                 isListening
-                  ? 'bg-red-500/20 text-red-400 border border-red-500/40 animate-pulse'
-                  : 'bg-slate-800 hover:bg-slate-700 text-teal-400 border border-slate-700'
+                  ? 'bg-red-500/20 text-[#D45060] border border-red-500/40 animate-pulse'
+                  : 'bg-[var(--vera-surface-muted)] hover:bg-[var(--vera-surface)] text-[#800020] dark:text-[#D45060] border border-[var(--vera-border)]'
               }`}
             >
               {isListening ? (
@@ -467,7 +558,7 @@ export const ComplaintForm: React.FC<ComplaintFormProps> = ({ onSuccess, onNavig
             onChange={(e) => setDescription(e.target.value)}
             rows={4}
             placeholder="Describe what happened, injuries, hazards, or location landmarks..."
-            className="w-full bg-slate-900/90 border border-slate-700 rounded-xl p-3.5 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 transition"
+            className="w-full vera-input rounded-xl p-3.5 text-sm focus:outline-none transition"
           />
           {isListening && (
             <div className="absolute bottom-3 right-3 flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-red-950/80 border border-red-500/30 text-[10px] text-red-300">
@@ -481,55 +572,55 @@ export const ComplaintForm: React.FC<ComplaintFormProps> = ({ onSuccess, onNavig
       {/* 3. Geolocation & Accuracy Banner */}
       <div className="space-y-2">
         <div className="flex items-center justify-between">
-          <label className="text-xs font-semibold uppercase tracking-wider text-slate-300">
+          <label className="text-xs font-semibold uppercase tracking-wider text-[var(--vera-text-secondary)]">
             3. Verified Location (GPS)
           </label>
           <button
             type="button"
             onClick={requestLocation}
             disabled={geoLoading}
-            className="inline-flex items-center gap-1 text-[11px] text-teal-400 hover:text-teal-300"
+            className="inline-flex items-center gap-1 text-[11px] text-[#800020] dark:text-[#D45060] hover:underline cursor-pointer"
           >
             <RefreshCw className={`w-3 h-3 ${geoLoading ? 'animate-spin' : ''}`} />
             Refresh GPS
           </button>
         </div>
 
-        <div className="p-3.5 rounded-xl bg-slate-900/80 border border-slate-800 flex flex-col gap-2">
+        <div className="p-3.5 rounded-xl bg-[var(--vera-surface)] border border-[var(--vera-border)] flex flex-col gap-2">
           {geoLoading ? (
-            <div className="flex items-center gap-2 text-xs text-slate-400">
-              <RefreshCw className="w-4 h-4 animate-spin text-teal-400" />
+            <div className="flex items-center gap-2 text-xs text-[var(--vera-text-muted)]">
+              <RefreshCw className="w-4 h-4 animate-spin text-[#800020] dark:text-[#D45060]" />
               <span>Acquiring high-accuracy GPS coordinates...</span>
             </div>
           ) : latitude && longitude ? (
             <div className="space-y-1.5">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex items-center gap-2 text-xs font-mono text-teal-300">
-                  <MapPin className="w-4 h-4 text-teal-400 shrink-0" />
+                <div className="flex items-center gap-2 text-xs font-mono text-[var(--vera-text-primary)]">
+                  <MapPin className="w-4 h-4 text-[#D45060] shrink-0" />
                   <span>{latitude.toFixed(5)}, {longitude.toFixed(5)}</span>
                 </div>
                 {accuracy && (
-                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-teal-500/10 text-teal-300 border border-teal-500/30">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-[#800020]/15 text-[#800020] dark:text-[#F3E6D5] border border-[#800020]/30">
                     GPS accuracy: approximately ±{accuracy} m
                   </span>
                 )}
               </div>
               {address && (
-                <p className="text-xs text-slate-300 font-medium line-clamp-2 pl-6">
+                <p className="text-xs text-[var(--vera-text-secondary)] font-medium line-clamp-2 pl-6">
                   {address}
                 </p>
               )}
             </div>
           ) : (
             <div className="space-y-2">
-              <div className="flex items-center gap-2 text-xs text-amber-400">
+              <div className="flex items-center gap-2 text-xs text-amber-500">
                 <AlertTriangle className="w-4 h-4 shrink-0" />
                 <span>{geoError || 'GPS permission not granted.'}</span>
               </div>
               <button
                 type="button"
                 onClick={() => setUseManualCoords(!useManualCoords)}
-                className="text-xs text-teal-400 hover:underline"
+                className="text-xs text-[#800020] dark:text-[#D45060] hover:underline cursor-pointer"
               >
                 {useManualCoords ? 'Hide manual coordinates' : 'Enter coordinates manually'}
               </button>
@@ -538,27 +629,27 @@ export const ComplaintForm: React.FC<ComplaintFormProps> = ({ onSuccess, onNavig
 
           {/* Manual coordinate entry fallback */}
           {useManualCoords && (
-            <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-800">
+            <div className="grid grid-cols-2 gap-2 pt-2 border-t border-[var(--vera-border)]">
               <div>
-                <label className="text-[10px] text-slate-400 block mb-1">Latitude</label>
+                <label className="text-[10px] text-[var(--vera-text-muted)] block mb-1">Latitude</label>
                 <input
                   type="number"
                   step="any"
                   value={manualLat}
                   onChange={(e) => setManualLat(e.target.value)}
                   placeholder="e.g. 26.8467"
-                  className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-xs text-white"
+                  className="w-full vera-input rounded-lg p-2 text-xs"
                 />
               </div>
               <div>
-                <label className="text-[10px] text-slate-400 block mb-1">Longitude</label>
+                <label className="text-[10px] text-[var(--vera-text-muted)] block mb-1">Longitude</label>
                 <input
                   type="number"
                   step="any"
                   value={manualLon}
                   onChange={(e) => setManualLon(e.target.value)}
                   placeholder="e.g. 80.9462"
-                  className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-xs text-white"
+                  className="w-full vera-input rounded-lg p-2 text-xs"
                 />
               </div>
             </div>
@@ -566,33 +657,33 @@ export const ComplaintForm: React.FC<ComplaintFormProps> = ({ onSuccess, onNavig
         </div>
       </div>
 
-      {/* 4. Photo & Video Uploads (Section 39) */}
+      {/* 4. Photo & Video Uploads */}
       <div className="space-y-3">
-        <label className="text-xs font-semibold uppercase tracking-wider text-slate-300 block">
+        <label className="text-xs font-semibold uppercase tracking-wider text-[var(--vera-text-secondary)] block">
           4. Attach Evidence (Photo & Video)
         </label>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {/* Photo Attachment */}
-          <div className="p-3 bg-slate-900/60 rounded-xl border border-slate-800 space-y-2">
+          <div className="p-3 bg-[var(--vera-surface-muted)] rounded-xl border border-[var(--vera-border)] space-y-2">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-slate-300 flex items-center gap-1.5">
-                <Upload className="w-3.5 h-3.5 text-teal-400" />
+              <span className="text-xs font-medium text-[var(--vera-text-secondary)] flex items-center gap-1.5">
+                <Upload className="w-3.5 h-3.5 text-[#800020] dark:text-[#D45060]" />
                 Photo (PNG, JPG)
               </span>
-              <label className="cursor-pointer px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-teal-300 text-xs font-medium transition border border-slate-700">
-                {photoPreview ? 'Change' : 'Upload'}
-                <input type="file" accept="image/*" onChange={handlePhotoUpload} className="hidden" />
+              <label className="cursor-pointer px-2.5 py-1 rounded-lg vera-button-secondary text-xs font-medium transition">
+                {photoCompressing ? 'Optimizing...' : photoPreview ? 'Change' : 'Upload'}
+                <input type="file" accept="image/*" onChange={handlePhotoUpload} disabled={photoCompressing} className="hidden" />
               </label>
             </div>
 
             {photoPreview && (
-              <div className="relative w-full h-24 rounded-lg overflow-hidden border border-teal-500/40">
+              <div className="relative w-full h-24 rounded-lg overflow-hidden border border-[var(--vera-border)]">
                 <img src={photoPreview} alt="Upload preview" className="w-full h-full object-cover" />
                 <button
                   type="button"
                   onClick={() => setPhotoPreview(null)}
-                  className="absolute top-1 right-1 bg-red-600/90 hover:bg-red-600 text-white rounded p-1 text-xs"
+                  className="absolute top-1 right-1 bg-red-600/90 hover:bg-red-600 text-white rounded p-1 text-xs cursor-pointer"
                 >
                   <X className="w-3 h-3" />
                 </button>
@@ -600,14 +691,14 @@ export const ComplaintForm: React.FC<ComplaintFormProps> = ({ onSuccess, onNavig
             )}
           </div>
 
-          {/* Video Attachment (Section 39: mp4, mov, webm up to 50MB) */}
-          <div className="p-3 bg-slate-900/60 rounded-xl border border-slate-800 space-y-2">
+          {/* Video Attachment */}
+          <div className="p-3 bg-[var(--vera-surface-muted)] rounded-xl border border-[var(--vera-border)] space-y-2">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-slate-300 flex items-center gap-1.5">
-                <Video className="w-3.5 h-3.5 text-red-400" />
+              <span className="text-xs font-medium text-[var(--vera-text-secondary)] flex items-center gap-1.5">
+                <Video className="w-3.5 h-3.5 text-[#D45060]" />
                 Video (MP4, MOV, WEBM)
               </span>
-              <label className="cursor-pointer px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-red-300 text-xs font-medium transition border border-slate-700">
+              <label className="cursor-pointer px-2.5 py-1 rounded-lg vera-button-secondary text-xs font-medium transition">
                 {videoPreview ? 'Change' : 'Upload (Max 50MB)'}
                 <input type="file" accept="video/mp4,video/quicktime,video/webm" onChange={handleVideoUpload} className="hidden" />
               </label>
@@ -616,24 +707,24 @@ export const ComplaintForm: React.FC<ComplaintFormProps> = ({ onSuccess, onNavig
             {/* Video Progress Bar */}
             {videoUploadProgress !== null && (
               <div className="space-y-1">
-                <div className="flex justify-between text-[10px] text-slate-400">
+                <div className="flex justify-between text-[10px] text-[var(--vera-text-muted)]">
                   <span className="truncate">{videoFileName}</span>
                   <span>{videoUploadProgress}%</span>
                 </div>
-                <div className="w-full bg-slate-950 rounded-full h-1.5 overflow-hidden">
-                  <div className="h-full bg-teal-500 transition-all duration-200" style={{ width: `${videoUploadProgress}%` }} />
+                <div className="w-full bg-[var(--vera-surface)] rounded-full h-1.5 overflow-hidden">
+                  <div className="h-full bg-[#800020] dark:bg-[#D45060] transition-all duration-200" style={{ width: `${videoUploadProgress}%` }} />
                 </div>
               </div>
             )}
 
             {/* Native HTML5 Video Preview */}
             {videoPreview && (
-              <div className="relative w-full rounded-lg overflow-hidden border border-red-500/40 bg-black">
+              <div className="relative w-full rounded-lg overflow-hidden border border-[var(--vera-border)] bg-black">
                 <video src={videoPreview} controls className="w-full h-28 object-contain" />
                 <button
                   type="button"
                   onClick={handleRemoveVideo}
-                  className="absolute top-1 right-1 bg-red-600/90 hover:bg-red-600 text-white rounded p-1 text-xs z-10"
+                  className="absolute top-1 right-1 bg-red-600/90 hover:bg-red-600 text-white rounded p-1 text-xs z-10 cursor-pointer"
                 >
                   <X className="w-3 h-3" />
                 </button>
@@ -643,7 +734,7 @@ export const ComplaintForm: React.FC<ComplaintFormProps> = ({ onSuccess, onNavig
         </div>
 
         {mediaError && (
-          <div className="p-2.5 rounded-lg bg-red-500/10 border border-red-500/30 text-xs text-red-400 flex items-center gap-2">
+          <div className="p-2.5 rounded-lg bg-red-500/10 border border-red-500/30 text-xs text-red-500 flex items-center gap-2">
             <AlertTriangle className="w-4 h-4 shrink-0" />
             <span>{mediaError}</span>
           </div>
@@ -651,7 +742,7 @@ export const ComplaintForm: React.FC<ComplaintFormProps> = ({ onSuccess, onNavig
       </div>
 
       {submitError && (
-        <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-xs text-red-400 flex items-center gap-2">
+        <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-xs text-red-500 flex items-center gap-2">
           <AlertTriangle className="w-4 h-4 shrink-0" />
           <span>{submitError}</span>
         </div>
@@ -660,8 +751,8 @@ export const ComplaintForm: React.FC<ComplaintFormProps> = ({ onSuccess, onNavig
       {/* Submit Action */}
       <button
         type="submit"
-        disabled={isSubmitting || geoLoading || (videoUploadProgress !== null && videoUploadProgress < 100)}
-        className="w-full py-3.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-slate-950 font-bold text-sm transition flex items-center justify-center gap-2 shadow-lg shadow-teal-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
+        disabled={isSubmitting || geoLoading || photoCompressing || (videoUploadProgress !== null && videoUploadProgress < 100)}
+        className="w-full py-3.5 rounded-xl vera-button-primary font-bold text-sm transition flex items-center justify-center gap-2 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
       >
         {isSubmitting ? (
           <>

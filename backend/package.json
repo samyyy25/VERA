@@ -5,9 +5,11 @@
   "main": "dist/server.js",
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
+    "seed": "ts-node-dev --transpile-only src/scripts/seed.ts",
     "build": "tsc",
-    "start": "node dist/server.js",
-    "test:risk": "ts-node-dev --transpile-only src/tests/riskEngine.test.ts"
+    "test": "ts-node src/tests/riskEngine.test.ts && ts-node src/tests/responsePlan.test.ts",
+    "test:risk": "ts-node src/tests/riskEngine.test.ts",
+    "test:plan": "ts-node src/tests/responsePlan.test.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.39.8",

@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.updateComplaintStatus = exports.getComplaintById = exports.getComplaints = exports.createComplaint = void 0;
+exports.seedDemoComplaints = exports.getRecentEvents = exports.updateComplaintStatus = exports.getComplaintById = exports.getComplaints = exports.createComplaint = void 0;
 const zod_1 = require("zod");
 const complaintStore_1 = require("../services/store/complaintStore");
 const nominatim_1 = require("../services/geolocation/nominatim");
@@ -135,3 +135,31 @@ const updateComplaintStatus = async (req, res) => {
     }
 };
 exports.updateComplaintStatus = updateComplaintStatus;
+const getRecentEvents = async (req, res) => {
+    try {
+        const limit = Math.min(Number(req.query.limit) || 50, 100);
+        const events = await complaintStore_1.complaintStore.getRecentEvents(limit);
+        return res.status(200).json({ success: true, count: events.length, events });
+    }
+    catch (error) {
+        console.error('Error fetching recent events:', error);
+        return res.status(500).json({ error: 'Internal Server Error', message: error.message });
+    }
+};
+exports.getRecentEvents = getRecentEvents;
+const seedDemoComplaints = async (_req, res) => {
+    try {
+        const result = await complaintStore_1.complaintStore.seedDemoData();
+        return res.status(200).json({
+            success: true,
+            message: `Successfully seeded ${result.seeded} demo complaints into VERA`,
+            count: result.complaints.length,
+            complaints: result.complaints,
+        });
+    }
+    catch (error) {
+        console.error('Error seeding demo data:', error);
+        return res.status(500).json({ error: 'Internal Server Error', message: error.message });
+    }
+};
+exports.seedDemoComplaints = seedDemoComplaints;

@@ -8,7 +8,7 @@
 
 ## 📖 Project Overview
 
-VERA is a real-time **Smart Complaint & Public Issue Management System** with **automatic emergency escalation**. Most civic reporting platforms treat every complaint identically — a broken streetlight and a life-threatening accident sit in the same slow queue. VERA fixes this by scoring every report's real urgency the moment it's submitted, and automatically activating an emergency response workflow the instant something dangerous is detected — no one has to manually flag it as urgent.
+VERA 2.0 is an intelligent **Civic Emergency & Public Hazard Response Orchestration System**. Most civic reporting platforms treat every complaint identically — a broken streetlight and a life-threatening accident sit in the same slow queue. VERA fixes this by scoring every report's urgency in real-time, extracting structured incident intelligence, generating actionable emergency response plans with nearest responder units, and enabling human-in-the-loop dispatch confirmation.
 
 ---
 
@@ -17,53 +17,51 @@ VERA is a real-time **Smart Complaint & Public Issue Management System** with **
 **Problem Statement 3 — Smart Complaint & Public Issue Management System**
 *Design a centralized platform for reporting, tracking, prioritizing, and resolving public or organizational complaints efficiently.*
 
-Standard complaint systems are digital suggestion boxes: submit, wait, hope someone reads it. That's tolerable for a pothole and dangerous for an emergency. VERA reframes complaints as existing on a severity spectrum rather than a flat queue, and builds the infrastructure to detect and act on that spectrum automatically.
+Standard complaint systems are digital suggestion boxes: submit, wait, hope someone reads it. That's tolerable for a pothole and dangerous for an emergency. VERA reframes complaints as existing on a severity spectrum rather than a flat queue, providing structured intelligence, transparent AI decision factors, and automated response orchestration.
 
 ---
 
-## 💡 Proposed Solution
+## 💡 Proposed Solution: VERA 2.0 Architecture
 
-1. A citizen reports an issue — category, description, optional photo/video, voice input — with automatic GPS capture and reverse-geocoded location.
-2. A **deterministic backend risk engine** scores the report 0–100 using weighted danger keywords, reporter frequency, and location clustering — never an LLM, never random.
-3. The report is **automatically routed to the correct responsible authority** (Municipal Roads, Sanitation, Electrical, Water, Police, Fire, Medical) based on category, with a target SLA and a real notification sent to that department.
-4. If the risk score crosses the threshold (≥60), the report **automatically escalates to Critical Incident status**, instantly provisioning a live video coordination room and activating the full emergency workflow.
-5. Every action — status change, routing decision, notification, live session — is logged in a transparent, timestamped audit trail, visible in real time on the Command Center.
-
-VERA does not claim to physically repair anything or dispatch real emergency units — it claims to detect, route, and coordinate faster than a manual process could, and to never fabricate a status or a statistic along the way.
+1. **Dual-Mode Citizen Portal**: Citizens report civic complaints or emergency incidents with voice triage, multilingual translation, photo evidence, and high-precision GPS. Auto-switches to Emergency Mode upon detecting danger indicators.
+2. **Deterministic Risk & Confidence Engine**: Scores urgency 0–100 and computes heuristic confidence metrics (`input_completeness`, `category_clarity`, `location_availability`, `evidence_strength`) without relying on opaque hallucinating black boxes.
+3. **Structured Incident Intelligence**: Generates standardized incident cards (type, severity, risk score, estimated affected individuals, injury detection, confirmed location, recommended action, and clear "Why VERA escalated" decision factors).
+4. **Non-Destructive Duplicate Detection**: Spatial ($\le 150\text{m}$) and temporal ($< 45\text{min}$) clustering that links related caller reports with similarity scores without deleting citizen records.
+5. **VERA Response Orchestrator**: Queries Overpass OSM for nearest hospital trauma centers and police stations, calculates realistic traffic ETAs ($\max(3, \text{round}((\text{dist}/25)\times 60 + 2))$), and prepares dispatch plans.
+6. **Human-in-the-Loop Verification**: Command center dispatchers can verify and trigger one-click dispatch confirmation or downgrade false alarms with full audit logging.
+7. **3-Column Tactical Command Center**:
+   - **Column 1 — Priority Queue**: Real-time incoming reports filterable by severity with duplicate cluster indicators.
+   - **Column 2 — Tactical Live Map**: Pulsing Ground Zero incident marker, GPS accuracy circle, hospital/police responder pins with ~ETA badges, and dynamic vector polylines.
+   - **Column 3 — Intelligence & Response Plan**: Live Incident Intelligence Card + Response Plan with human confirmation actions.
+   - **Bottom Panel — Operational Timeline**: Immutable audit trail of system evaluation, AI triage, operator decisions, and dispatch statuses.
 
 ---
 
 ## ✨ Features
 
-### Command Center (Dashboard)
-Real-time overview: total incidents, active issues, critical escalations, and resolved counts, each with a live sparkline. A live incidents table and an interactive incident map are shown side by side, with click-to-expand incident detail popovers.
+### 3-Column Command Center (Dashboard)
+A unified situational awareness dashboard featuring 5 live KPI sparklines, a real-time Priority Queue, a Leaflet-powered Tactical Map with responder routing, and side-by-side Incident Intelligence & Response Plan cards.
 
-### Incidents
-Full searchable, filterable list of every complaint and incident, with live status, risk score, and one-line description — filterable by status, category, and risk level.
+### Incident Intelligence & Explainable AI
+Structured cards showing risk breakdown, injury cues, affected counts, and transparent checkmarks explaining why VERA escalated the report.
 
-### Map View
-A dedicated full-page live map (OpenStreetMap + Leaflet, no API key required) showing every incident's exact location, with an in-map detail card per marker.
+### VERA Response Plan & Dispatch Orchestration
+Automated primary (e.g. Hospital Trauma) and secondary (e.g. Police Traffic Control) unit recommendation with real-time distance and estimated ETA calculation, subject to operator confirmation.
 
-### Live Feed
-An unfiltered, chronological real-time stream of every incoming report across all civic and emergency channels — the rawest view of what's entering the system right now.
+### Non-Destructive Duplicate Detection
+Intelligent spatial-temporal grouping that highlights multi-caller clusters (e.g., "3 related reports nearby") to increase response confidence while preserving individual submissions.
 
-### Video Rooms
-Emergency video coordination channels, automatically provisioned the moment an incident escalates to Critical status (risk ≥ 60). Citizens and responding departments (Police, Municipal, Hospital) join the same room with role-tagged identities.
+### Dual-Mode Citizen Portal (Report Issue)
+Offers "Civic Issue" mode for routine maintenance and "Emergency Priority" mode for active hazards, with real-time auto-switch detection when urgent language is entered.
 
-### Authorities — Dispatch Routing Matrix
-A transparent view of VERA's deterministic category-to-department routing table: each civic category, its responsible department, target SLA, contact details, and how many incidents have been routed to it, with auto-notification status.
+### Tactical Live Map
+High-resolution Leaflet map displaying Ground Zero, GPS precision radii, nearby emergency facilities, and estimated route paths.
 
-### Reports
-An exportable audit and compliance log of every incident, with full filtering (category, status, risk, date range) and one-click CSV export for institutional record-keeping.
+### Operational Timeline
+A timestamped chronicle recording submission, AI risk assessment, duplicate linking, operator verification, and dispatch milestones.
 
-### Analytics
-Aggregated civic intelligence computed directly from real database records — total evaluated, average risk score, resolved count, average resolution time, incident inflow over time, risk-level distribution, and category breakdown. No fabricated statistics: any metric without a real computable basis is omitted rather than invented.
-
-### Telemetry
-Live system health for every dependent service — database, AI gateway, translation, and maps — so the platform's own reliability is transparently visible, not just claimed.
-
-### Report Issue (Citizen Portal)
-The citizen-facing entry point: category selection, incident description with voice-to-text input, automatic GPS verification with accuracy display, photo and video evidence upload, and a real-time preview of which department the report will be routed to before submission.
+### Video Rooms & WebRTC Mesh
+Emergency coordination rooms automatically activated for critical incidents, allowing citizens and responders to establish live communication.
 
 ---
 

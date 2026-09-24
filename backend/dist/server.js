@@ -19,8 +19,8 @@ app.use((0, cors_1.default)({
     },
     credentials: true,
 }));
-app.use(express_1.default.json({ limit: '10mb' }));
-app.use(express_1.default.urlencoded({ extended: true }));
+app.use(express_1.default.json({ limit: '60mb' }));
+app.use(express_1.default.urlencoded({ extended: true, limit: '60mb' }));
 // Root welcome & API info
 app.get('/', (_req, res) => {
     res.json({
